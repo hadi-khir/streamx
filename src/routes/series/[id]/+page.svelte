@@ -1,4 +1,7 @@
 <script lang="ts">
+	import FallbackImage from '$lib/components/FallbackImage.svelte';
+	import { tmdbFallback } from '$lib/images';
+
 	let { data } = $props();
 
 	let favorited = $state(false);
@@ -151,15 +154,10 @@
 							class="flex items-center gap-4 rounded-xl border border-surface-800 bg-surface-900 p-3 transition-colors hover:border-surface-600"
 						>
 							<div class="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-surface-800 sm:h-16 sm:w-28">
-								{#if ep.image || data.poster}
-									<img
-										src={ep.image ?? data.poster}
-										alt=""
-										loading="lazy"
-										class="h-full w-full object-cover"
-										onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-									/>
-								{/if}
+								<FallbackImage
+									sources={[ep.image, tmdbFallback(ep.image), data.poster]}
+									imgClass="h-full w-full object-cover"
+								/>
 								{#if ep.progressPct > 0}
 									<div class="absolute right-0 bottom-0 left-0 h-1 bg-black/50">
 										<div class="h-full bg-accent" style="width: {ep.progressPct * 100}%"></div>

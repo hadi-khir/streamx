@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tmdbFallback } from '$lib/images';
+
 	let {
 		href,
 		image,
@@ -17,7 +19,13 @@
 		landscape?: boolean;
 	} = $props();
 
-	let broken = $state(false);
+	// On error, retry dead provider-mirror artwork on TMDB's CDN before giving up
+	let errors = $state(0);
+	$effect(() => {
+		image;
+		errors = 0;
+	});
+	const src = $derived(errors === 0 ? image : errors === 1 ? tmdbFallback(image) : null);
 </script>
 
 <a
@@ -25,12 +33,12 @@
 	class="group block overflow-hidden rounded-xl border border-surface-800 bg-surface-900 transition-colors hover:border-surface-600"
 >
 	<div class="relative {landscape ? 'aspect-video' : 'aspect-[2/3]'} overflow-hidden bg-surface-800">
-		{#if image && !broken}
+		{#if src}
 			<img
-				src={image}
+				{src}
 				alt=""
 				loading="lazy"
-				onerror={() => (broken = true)}
+				onerror={() => (errors += 1)}
 				class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 {landscape ? 'object-contain p-4' : ''}"
 			/>
 		{:else}
