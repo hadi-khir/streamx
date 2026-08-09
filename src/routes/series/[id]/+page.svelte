@@ -120,7 +120,16 @@
 
 		<div class="mt-10">
 			{#if data.seasons.length === 0}
-				<p class="py-8 text-center text-sm text-zinc-500">No episodes available.</p>
+				<div class="rounded-xl border border-dashed border-surface-700 px-6 py-8 text-center">
+					<p class="text-sm text-zinc-400">The provider hasn't published any playable episodes for this title yet.</p>
+					{#if data.providerSeasons.length}
+						<p class="mt-2 text-xs text-zinc-600">
+							Listed: {data.providerSeasons
+								.map((s) => `${s.name}${s.episodeCount ? ` (${s.episodeCount} episodes)` : ''}`)
+								.join(' · ')}
+						</p>
+					{/if}
+				</div>
 			{:else}
 				<div class="flex flex-wrap gap-2">
 					{#each data.seasons as s (s.season)}
@@ -141,9 +150,15 @@
 							href={episodeUrl(ep)}
 							class="flex items-center gap-4 rounded-xl border border-surface-800 bg-surface-900 p-3 transition-colors hover:border-surface-600"
 						>
-							<div class="relative hidden h-16 w-28 shrink-0 overflow-hidden rounded-lg bg-surface-800 sm:block">
-								{#if ep.image}
-									<img src={ep.image} alt="" loading="lazy" class="h-full w-full object-cover" />
+							<div class="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-surface-800 sm:h-16 sm:w-28">
+								{#if ep.image || data.poster}
+									<img
+										src={ep.image ?? data.poster}
+										alt=""
+										loading="lazy"
+										class="h-full w-full object-cover"
+										onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+									/>
 								{/if}
 								{#if ep.progressPct > 0}
 									<div class="absolute right-0 bottom-0 left-0 h-1 bg-black/50">

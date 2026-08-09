@@ -55,6 +55,13 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		progressRows.map((r) => [r.streamId, r.duration > 0 ? r.position / r.duration : 0])
 	);
 
+	// Season covers double as episode-thumb fallbacks when a still is missing
+	const seasonCovers = new Map<string, string>();
+	for (const s of Array.isArray(data.seasons) ? data.seasons : []) {
+		const cover = s.cover_big || s.cover || s.cover_tmdb;
+		if (cover && s.season_number != null) seasonCovers.set(String(s.season_number), cover);
+	}
+
 	const seasons: { season: string; episodes: Episode[] }[] = [];
 	const episodesBySeason = data.episodes ?? {};
 	for (const season of Object.keys(episodesBySeason).sort((a, b) => Number(a) - Number(b))) {
@@ -65,7 +72,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 				num: Number(e.episode_num) || 0,
 				title: e.title || `Episode ${e.episode_num}`,
 				ext: e.container_extension || 'mp4',
-				image: e.info?.movie_image || null,
+				image: e.info?.movie_image || seasonCovers.get(String(e.season ?? season)) || null,
 				plot: e.info?.plot || null,
 				durationSecs: e.info?.duration_secs ? Number(e.info.duration_secs) : null,
 				progressPct: Math.min(1, progressMap.get(id) ?? 0)
@@ -73,6 +80,16 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		});
 		if (eps.length) seasons.push({ season, episodes: eps });
 	}
+
+	// When the provider lists seasons but no episodes (placeholder entries),
+	// surface the season metadata so the page can explain what's missing.
+	const providerSeasons =
+		seasons.length === 0 && Array.isArray(data.seasons)
+			? data.seasons.map((s: any) => ({
+					name: s.name || `Season ${s.season_number}`,
+					episodeCount: Number(s.episode_count) || 0
+				}))
+			: [];
 
 	const favorited =
 		db
@@ -105,6 +122,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 				: [],
 		cast: info.cast || null,
 		seasons,
+		providerSeasons,
 		favorited
 	};
 };

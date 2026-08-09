@@ -110,11 +110,14 @@ async function xtreamRequest<T>(
 	conn: XtreamConn,
 	action: string,
 	params: Record<string, string> = {},
-	timeout = 15_000
+	timeout = 15_000,
+	skipCache = false
 ): Promise<T> {
 	const key = `${connKey(conn)}:${action}:${JSON.stringify(params)}`;
-	const cached = getCached<T>(key);
-	if (cached) return cached;
+	if (!skipCache) {
+		const cached = getCached<T>(key);
+		if (cached) return cached;
+	}
 
 	const res = await fetch(buildApiUrl(conn, action, params), {
 		signal: AbortSignal.timeout(timeout)
@@ -151,8 +154,24 @@ export const getSeries = (c: XtreamConn, categoryId?: string | null, timeout?: n
 
 export const getVodInfo = (c: XtreamConn, vodId: string | number) =>
 	xtreamRequest<Record<string, any>>(c, 'get_vod_info', { vod_id: String(vodId) });
-export const getSeriesInfo = (c: XtreamConn, seriesId: string | number) =>
-	xtreamRequest<Record<string, any>>(c, 'get_series_info', { series_id: String(seriesId) });
+
+/**
+ * Some panels return partial get_series_info responses under load (no
+ * `episodes` key). Retry once bypassing the cache so a bad response doesn't
+ * get pinned for the full cache TTL.
+ */
+export async function getSeriesInfo(c: XtreamConn, seriesId: string | number) {
+	const params = { series_id: String(seriesId) };
+	let data = await xtreamRequest<Record<string, any>>(c, 'get_series_info', params);
+	const empty =
+		!data?.episodes ||
+		(!Array.isArray(data.episodes) && Object.keys(data.episodes).length === 0) ||
+		(Array.isArray(data.episodes) && data.episodes.length === 0);
+	if (empty) {
+		data = await xtreamRequest<Record<string, any>>(c, 'get_series_info', params, 20_000, true);
+	}
+	return data;
+}
 
 export interface EpgListing {
 	title: string;
