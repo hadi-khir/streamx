@@ -20,12 +20,16 @@
 		onProgress?: (position: number, duration: number) => void;
 	} = $props();
 
+	const VOLUME_KEY = 'streamx:volume';
+	const MUTED_KEY = 'streamx:muted';
+
 	let video: HTMLVideoElement;
 	let container: HTMLDivElement;
 	let hls: Hls | null = null;
 
 	let status = $state<'loading' | 'playing' | 'error'>('loading');
-	let statusMsg = $state('Connecting…');
+	let buffering = $state(false);
+	let needsGesture = $state(false);
 	let debugInfo = $state<string[]>([]);
 	let playing = $state(false);
 	let muted = $state(false);
@@ -35,10 +39,21 @@
 	let fullscreen = $state(false);
 	let showControls = $state(true);
 
+	// Audio handling
+	let audioSilent = $state(false);
+	let audioNoticeDismissed = $state(false);
+	let audioTracks = $state<{ id: number; name: string }[]>([]);
+	let currentAudioTrack = $state(-1);
+	let audioCheckGen = $state(0);
+
 	let attempt = 0; // generation counter to invalidate stale callbacks
 	let seeked = false;
 	let hideTimer: ReturnType<typeof setTimeout>;
-	let progressTimer: ReturnType<typeof setInterval>;
+	let audioCheckTimer: ReturnType<typeof setTimeout>;
+
+	function log(line: string) {
+		debugInfo = [...debugInfo.slice(-7), line];
+	}
 
 	function cleanup() {
 		if (hls) {
@@ -47,15 +62,23 @@
 		}
 	}
 
-	function tryHls(url: string, onSuccess: () => void, onFail: () => void) {
+	function attemptPlay() {
+		video.play().catch((e) => {
+			// Autoplay with sound blocked: surface a tap-to-play button instead of hanging
+			if (e?.name === 'NotAllowedError') needsGesture = true;
+		});
+	}
+
+	function tryHls(label: string, url: string, onSuccess: () => void, onFail: () => void) {
 		cleanup();
 
 		if (!Hls.isSupported()) {
-			// Safari native HLS
+			// Safari plays HLS natively
 			if (video.canPlayType('application/vnd.apple.mpegurl')) {
-				tryDirect(url, onSuccess, onFail);
+				tryDirect(label, url, onSuccess, onFail);
 				return;
 			}
+			log(`${label}: MSE not supported in this browser`);
 			onFail();
 			return;
 		}
@@ -79,12 +102,19 @@
 			if (settled) return;
 			settled = true;
 			onSuccess();
-			video.play().catch(() => {});
+			attemptPlay();
+		});
+
+		instance.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+			audioTracks = instance.audioTracks.map((t, i) => ({
+				id: i,
+				name: t.name || t.lang || `Track ${i + 1}`
+			}));
+			currentAudioTrack = instance.audioTrack;
 		});
 
 		instance.on(Hls.Events.ERROR, (_, data) => {
-			const detail = `${data.type}/${data.details}${data.response ? ` (${data.response.code})` : ''}`;
-			debugInfo = [...debugInfo.slice(-4), detail];
+			log(`${label}: ${data.type}/${data.details}${data.response ? ` (${data.response.code})` : ''}`);
 
 			if (data.fatal && !settled) {
 				settled = true;
@@ -107,6 +137,7 @@
 		setTimeout(() => {
 			if (!settled) {
 				settled = true;
+				log(`${label}: timed out`);
 				instance.destroy();
 				if (hls === instance) hls = null;
 				onFail();
@@ -114,7 +145,7 @@
 		}, 12_000);
 	}
 
-	function tryDirect(url: string, onSuccess: () => void, onFail: () => void) {
+	function tryDirect(label: string, url: string, onSuccess: () => void, onFail: () => void) {
 		cleanup();
 		let settled = false;
 
@@ -125,8 +156,9 @@
 			video.removeEventListener('error', onErr);
 			if (ok) {
 				onSuccess();
-				video.play().catch(() => {});
+				attemptPlay();
 			} else {
+				log(`${label}: ${video.error ? `media error ${video.error.code}` : 'timed out'}`);
 				video.removeAttribute('src');
 				onFail();
 			}
@@ -144,8 +176,13 @@
 
 	function start() {
 		status = 'loading';
-		statusMsg = 'Connecting to stream…';
+		buffering = false;
+		needsGesture = false;
 		debugInfo = [];
+		audioSilent = false;
+		audioNoticeDismissed = false;
+		audioTracks = [];
+		currentAudioTrack = -1;
 		seeked = false;
 		attempt++;
 		const generation = attempt;
@@ -156,11 +193,9 @@
 			if (stale()) return;
 			if (idx >= attempts.length) {
 				status = 'error';
-				statusMsg = 'Could not play this stream. The server may not support web playback for this format.';
 				return;
 			}
 			const current = attempts[idx++];
-			statusMsg = `Trying ${current.label}… (${idx}/${attempts.length})`;
 
 			const onSuccess = () => {
 				if (!stale()) status = 'playing';
@@ -169,8 +204,8 @@
 				if (!stale()) tryNext();
 			};
 
-			if (current.method === 'hls') tryHls(current.url, onSuccess, onFail);
-			else tryDirect(current.url, onSuccess, onFail);
+			if (current.method === 'hls') tryHls(current.label, current.url, onSuccess, onFail);
+			else tryDirect(current.label, current.url, onSuccess, onFail);
 		};
 		tryNext();
 	}
@@ -184,21 +219,56 @@
 		};
 	});
 
+	// Restore persisted volume/mute once
+	$effect(() => {
+		const savedVolume = parseFloat(localStorage.getItem(VOLUME_KEY) ?? '');
+		if (isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) video.volume = savedVolume;
+		video.muted = localStorage.getItem(MUTED_KEY) === '1';
+	});
+
+	// Detect video that plays without any decoded audio (e.g. AC-3 in Chrome)
+	$effect(() => {
+		audioCheckGen; // re-check after an audio track switch
+		if (status !== 'playing' || muted || volume === 0) {
+			audioSilent = false;
+			return;
+		}
+		audioCheckTimer = setTimeout(() => {
+			const v = video as any;
+			if (typeof v.webkitAudioDecodedByteCount === 'number') {
+				audioSilent = v.webkitAudioDecodedByteCount === 0;
+			} else if (typeof v.mozHasAudio === 'boolean') {
+				audioSilent = !v.mozHasAudio;
+			}
+		}, 5000);
+		return () => clearTimeout(audioCheckTimer);
+	});
+
 	// Periodic progress reporting for VOD
 	$effect(() => {
 		if (!onProgress || live) return;
-		progressTimer = setInterval(() => {
+		const timer = setInterval(() => {
 			if (video && video.currentTime > 0 && isFinite(video.duration)) {
 				onProgress(video.currentTime, video.duration);
 			}
 		}, 10_000);
-		return () => clearInterval(progressTimer);
+		return () => clearInterval(timer);
 	});
 
 	onDestroy(() => {
 		clearTimeout(hideTimer);
+		clearTimeout(audioCheckTimer);
 		cleanup();
 	});
+
+	function switchAudioTrack(id: number) {
+		if (!hls) return;
+		hls.audioTrack = id;
+		currentAudioTrack = id;
+		audioSilent = false;
+		audioNoticeDismissed = false;
+		audioCheckGen++;
+	}
 
 	function onLoadedMetadata() {
 		if (!seeked && !live && initialPosition > 0 && video.duration > 0 && initialPosition < video.duration - 5) {
@@ -216,7 +286,7 @@
 	}
 
 	function togglePlay() {
-		if (video.paused) video.play().catch(() => {});
+		if (video.paused) attemptPlay();
 		else video.pause();
 	}
 
@@ -242,7 +312,8 @@
 	}
 
 	function onKey(e: KeyboardEvent) {
-		if ((e.target as HTMLElement).tagName === 'INPUT') return;
+		const tag = (e.target as HTMLElement).tagName;
+		if (tag === 'INPUT' || tag === 'SELECT') return;
 		switch (e.key) {
 			case ' ':
 			case 'k':
@@ -310,21 +381,23 @@
 		onvolumechange={() => {
 			volume = video.volume;
 			muted = video.muted;
+			localStorage.setItem(VOLUME_KEY, String(video.volume));
+			localStorage.setItem(MUTED_KEY, video.muted ? '1' : '0');
 		}}
 		onwaiting={() => {
-			if (status === 'playing') statusMsg = 'Buffering…';
+			if (status === 'playing') buffering = true;
 		}}
-		onplaying={() => (status = 'playing')}
+		onplaying={() => {
+			status = 'playing';
+			buffering = false;
+		}}
 		onloadedmetadata={onLoadedMetadata}
 	></video>
 
 	{#if status === 'loading'}
 		<div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/70">
 			<div class="mb-3 h-10 w-10 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
-			<p class="text-sm text-zinc-400">{statusMsg}</p>
-			{#each debugInfo as msg, i (i)}
-				<p class="mt-1 max-w-md truncate text-xs text-red-400/70">{msg}</p>
-			{/each}
+			<p class="text-sm text-zinc-400">Loading stream…</p>
 		</div>
 	{:else if status === 'error'}
 		<div class="absolute inset-0 flex items-center justify-center bg-black/80">
@@ -332,17 +405,65 @@
 				<svg class="mx-auto mb-3 h-12 w-12 text-zinc-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
 				</svg>
-				<p class="mb-2 text-sm text-zinc-300">{statusMsg}</p>
-				{#each debugInfo as msg, i (i)}
-					<p class="truncate text-xs text-red-400/70">{msg}</p>
-				{/each}
+				<p class="text-sm font-medium text-zinc-200">Couldn't play this stream</p>
+				<p class="mt-1 text-xs text-zinc-500">
+					The format may not be supported for web playback, or the stream is offline.
+				</p>
 				<button
 					onclick={start}
 					class="mt-4 rounded-lg bg-accent px-4 py-2 text-sm text-white transition-colors hover:bg-accent-hover"
 				>
-					Retry
+					Try again
 				</button>
+				{#if debugInfo.length}
+					<details class="mt-4 text-left">
+						<summary class="cursor-pointer text-xs text-zinc-600 hover:text-zinc-400">Technical details</summary>
+						<div class="mt-2 rounded-lg bg-black/50 p-2">
+							{#each debugInfo as msg, i (i)}
+								<p class="truncate font-mono text-[11px] text-zinc-500">{msg}</p>
+							{/each}
+						</div>
+					</details>
+				{/if}
 			</div>
+		</div>
+	{/if}
+
+	{#if buffering && status === 'playing'}
+		<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+			<div class="h-10 w-10 animate-spin rounded-full border-2 border-white/60 border-t-transparent drop-shadow"></div>
+		</div>
+	{/if}
+
+	{#if needsGesture}
+		<div class="absolute inset-0 flex items-center justify-center bg-black/60">
+			<button
+				onclick={() => {
+					needsGesture = false;
+					attemptPlay();
+				}}
+				class="flex h-20 w-20 items-center justify-center rounded-full bg-accent text-white shadow-2xl transition-transform hover:scale-105"
+				title="Play"
+			>
+				<svg class="ml-1 h-9 w-9" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+			</button>
+		</div>
+	{/if}
+
+	{#if audioSilent && !audioNoticeDismissed && status === 'playing'}
+		<div class="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 py-1.5 pr-2 pl-3 text-xs text-zinc-300 backdrop-blur">
+			<span>
+				No audio? {audioTracks.length > 1
+					? 'Try another audio track from the controls below.'
+					: "This stream's audio codec may not be supported by your browser."}
+			</span>
+			<button
+				onclick={() => (audioNoticeDismissed = true)}
+				class="rounded-full p-0.5 text-zinc-500 hover:text-white"
+				title="Dismiss"
+			>
+				<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+			</button>
 		</div>
 	{/if}
 
@@ -382,6 +503,19 @@
 			{/if}
 
 			<div class="flex-1"></div>
+
+			{#if audioTracks.length > 1}
+				<select
+					value={currentAudioTrack}
+					onchange={(e) => switchAudioTrack(Number(e.currentTarget.value))}
+					class="max-w-32 rounded-lg border border-white/20 bg-black/60 px-2 py-1 text-xs text-white outline-none"
+					title="Audio track"
+				>
+					{#each audioTracks as track (track.id)}
+						<option value={track.id}>{track.name}</option>
+					{/each}
+				</select>
+			{/if}
 
 			<button onclick={toggleMute} class="text-white transition-colors hover:text-accent" title="Mute (m)">
 				{#if muted || volume === 0}

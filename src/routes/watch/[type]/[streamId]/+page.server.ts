@@ -18,15 +18,20 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const seriesId = url.searchParams.get('series');
 
 	const base = `/api/stream/${conn.id}/${type}/${streamId}`;
-	const attempts: { label: string; method: 'hls' | 'direct'; url: string }[] = [
-		{ label: 'HLS stream', method: 'hls', url: `${base}?ext=m3u8` }
-	];
-	if (type !== 'live') {
-		attempts.push({ label: 'MP4 stream', method: 'direct', url: `${base}?ext=mp4` });
-	}
-	attempts.push({ label: 'TS stream', method: 'direct', url: `${base}?ext=ts` });
-	if (ext && !['mp4', 'ts', 'm3u8'].includes(ext) && /^[a-zA-Z0-9]{1,10}$/.test(ext)) {
-		attempts.push({ label: 'Direct stream', method: 'direct', url: `${base}?ext=${ext}` });
+	const attempts: { label: string; method: 'hls' | 'direct'; url: string }[] = [];
+	if (type === 'live') {
+		attempts.push({ label: 'HLS', method: 'hls', url: `${base}?ext=m3u8` });
+		attempts.push({ label: 'TS', method: 'direct', url: `${base}?ext=ts` });
+	} else {
+		// VOD: the provider's own container format is the most likely to work —
+		// trying HLS first fails visibly on most providers before MP4 succeeds.
+		const extOk = ext && ext !== 'm3u8' && /^[a-zA-Z0-9]{1,10}$/.test(ext);
+		if (extOk) attempts.push({ label: ext.toUpperCase(), method: 'direct', url: `${base}?ext=${ext}` });
+		if (!extOk || ext !== 'mp4') {
+			attempts.push({ label: 'MP4', method: 'direct', url: `${base}?ext=mp4` });
+		}
+		attempts.push({ label: 'HLS', method: 'hls', url: `${base}?ext=m3u8` });
+		if (ext !== 'ts') attempts.push({ label: 'TS', method: 'direct', url: `${base}?ext=ts` });
 	}
 
 	const progressType = type === 'live' ? 'live' : type === 'movie' ? 'movie' : 'episode';

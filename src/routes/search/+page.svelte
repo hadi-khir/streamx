@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { navigating } from '$app/state';
 	import MediaCard from '$lib/components/MediaCard.svelte';
 
 	let { data } = $props();
 
 	const total = $derived(data.live.length + data.movies.length + data.series.length);
+	const searching = $derived(navigating.to?.url.pathname === '/search');
 
 	function liveUrl(item: { id: number; name: string; icon: string }): string {
 		const q = new URLSearchParams({ name: item.name, icon: item.icon ?? '', conn: String(data.connId) });
@@ -24,8 +26,9 @@
 			<input
 				name="q"
 				value={data.q}
+				disabled={searching}
 				placeholder="Search channels, movies, series… (min 2 characters)"
-				class="w-full rounded-xl border border-surface-700 bg-surface-900 py-2.5 pr-4 pl-10 text-sm outline-none focus:border-accent"
+				class="w-full rounded-xl border border-surface-700 bg-surface-900 py-2.5 pr-4 pl-10 text-sm outline-none focus:border-accent disabled:opacity-60"
 			/>
 		</div>
 		<p class="mt-2 text-xs text-zinc-600">
@@ -33,13 +36,19 @@
 		</p>
 	</form>
 
-	{#if data.loadError}
+	{#if searching}
+		<div class="flex flex-col items-center gap-3 py-16">
+			<div class="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
+			<p class="text-sm text-zinc-400">Searching…</p>
+			<p class="text-xs text-zinc-600">First search on a connection indexes the whole catalog — hang tight.</p>
+		</div>
+	{:else if data.loadError}
 		<p class="mt-6 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{data.loadError}</p>
 	{:else if data.q.length >= 2 && total === 0}
 		<p class="py-16 text-center text-sm text-zinc-500">No results for “{data.q}”.</p>
 	{/if}
 
-	{#if data.live.length}
+	{#if !searching && data.live.length}
 		<section class="mt-8">
 			<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Live channels</h2>
 			<div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -60,7 +69,7 @@
 		</section>
 	{/if}
 
-	{#if data.movies.length}
+	{#if !searching && data.movies.length}
 		<section class="mt-8">
 			<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Movies</h2>
 			<div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
@@ -71,7 +80,7 @@
 		</section>
 	{/if}
 
-	{#if data.series.length}
+	{#if !searching && data.series.length}
 		<section class="mt-8">
 			<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Series</h2>
 			<div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
