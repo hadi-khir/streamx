@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+
+@theme {
+	--color-accent: oklch(60.6% 0.25 292.717); /* violet-500 */
+	--color-accent-hover: oklch(54.1% 0.281 293.009); /* violet-600 */
+	--color-surface-950: oklch(14.5% 0.014 285.823);
+	--color-surface-900: oklch(21% 0.006 285.885);
+	--color-surface-800: oklch(27.4% 0.006 286.033);
+	--color-surface-700: oklch(37% 0.013 285.805);
+	--color-surface-600: oklch(44.2% 0.017 285.786);
+}
+
+html {
+	background-color: var(--color-surface-950);
+	color: oklch(96.7% 0.001 286.375);
+	color-scheme: dark;
+}
+
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-surface-700) transparent;
+}
