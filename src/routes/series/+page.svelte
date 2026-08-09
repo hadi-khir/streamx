@@ -1,4 +1,6 @@
 <script lang="ts">
+	import CategorySidebar from '$lib/components/CategorySidebar.svelte';
+	import CategorySelect from '$lib/components/CategorySelect.svelte';
 	import MediaCard from '$lib/components/MediaCard.svelte';
 	import { visible } from '$lib/actions/visible';
 
@@ -17,44 +19,24 @@
 <svelte:head><title>Series — StreamX</title></svelte:head>
 
 <div class="flex h-full">
-	<aside class="hidden w-60 shrink-0 overflow-y-auto border-r border-surface-800 p-3 lg:block">
-		<h2 class="px-2 pb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">Categories</h2>
-		<nav class="space-y-0.5">
-			<a
-				href="/series?cat=all"
-				class="block truncate rounded-lg px-3 py-1.5 text-sm {data.selected === 'all'
-					? 'bg-accent/15 font-medium text-accent'
-					: 'text-zinc-400 hover:bg-surface-800 hover:text-zinc-200'}"
-			>
-				All series
-			</a>
-			{#each data.categories as cat (cat.category_id)}
-				<a
-					href="/series?cat={encodeURIComponent(cat.category_id)}"
-					class="block truncate rounded-lg px-3 py-1.5 text-sm {data.selected === cat.category_id
-						? 'bg-accent/15 font-medium text-accent'
-						: 'text-zinc-400 hover:bg-surface-800 hover:text-zinc-200'}"
-				>
-					{cat.category_name}
-				</a>
-			{/each}
-		</nav>
-	</aside>
+	<CategorySidebar
+		basePath="/series"
+		allLabel="All series"
+		categories={data.categories}
+		selected={data.selected}
+		connId={data.connId}
+		contentType="series"
+	/>
 
 	<div class="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
 		<div class="mb-4 flex items-center justify-between gap-3">
 			<h1 class="text-xl font-bold">Series</h1>
-			<select
-				class="rounded-lg border border-surface-700 bg-surface-900 px-2 py-1.5 text-sm lg:hidden"
-				onchange={(e) => (location.href = `/series?cat=${encodeURIComponent(e.currentTarget.value)}`)}
-			>
-				<option value="all" selected={data.selected === 'all'}>All series</option>
-				{#each data.categories as cat (cat.category_id)}
-					<option value={cat.category_id} selected={data.selected === cat.category_id}>
-						{cat.category_name}
-					</option>
-				{/each}
-			</select>
+			<CategorySelect
+				basePath="/series"
+				allLabel="All series"
+				categories={data.categories}
+				selected={data.selected}
+			/>
 		</div>
 
 		{#if data.loadError}

@@ -5,6 +5,7 @@
 	let { data } = $props();
 
 	function resumeUrl(row: WatchProgress): string {
+		if (row.streamType === 'live') return liveUrl(row);
 		const type = row.streamType === 'movie' ? 'movie' : 'series';
 		const q = new URLSearchParams({
 			name: row.name,
@@ -14,6 +15,12 @@
 		if (row.ext) q.set('ext', row.ext);
 		if (row.seriesId) q.set('series', String(row.seriesId));
 		return `/watch/${type}/${row.streamId}?${q}`;
+	}
+
+	function typeLabel(row: WatchProgress): string {
+		if (row.streamType === 'live') return 'Live TV';
+		if (row.streamType === 'movie') return 'Movie';
+		return 'Episode';
 	}
 
 	function liveUrl(row: WatchProgress | Favorite): string {
@@ -68,21 +75,26 @@
 			</section>
 		{/if}
 
-		{#if data.recentLive.length}
+		{#if data.recents.length}
 			<section class="mt-8">
-				<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Recent channels</h2>
+				<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Recents</h2>
 				<div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-					{#each data.recentLive as row (row.id)}
+					{#each data.recents as row (row.id)}
 						<a
-							href={liveUrl(row)}
+							href={resumeUrl(row)}
 							class="flex items-center gap-3 rounded-xl border border-surface-800 bg-surface-900 p-3 transition-colors hover:border-surface-600"
 						>
 							<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-800">
 								{#if row.icon}
 									<img src={row.icon} alt="" loading="lazy" class="max-h-full max-w-full object-contain" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
+								{:else}
+									<svg class="h-5 w-5 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
 								{/if}
 							</div>
-							<p class="truncate text-sm text-zinc-200">{row.name}</p>
+							<div class="min-w-0 flex-1">
+								<p class="truncate text-sm text-zinc-200">{row.name}</p>
+								<p class="text-xs text-zinc-500">{typeLabel(row)}</p>
+							</div>
 						</a>
 					{/each}
 				</div>
@@ -100,7 +112,7 @@
 			</section>
 		{/if}
 
-		{#if !data.continueWatching.length && !data.recentLive.length && !data.favorites.length}
+		{#if !data.continueWatching.length && !data.recents.length && !data.favorites.length}
 			<div class="mt-6 grid gap-4 sm:grid-cols-3">
 				<a href="/live" class="rounded-2xl border border-surface-800 bg-surface-900 p-6 transition-colors hover:border-surface-600">
 					<h3 class="font-semibold">Live TV</h3>

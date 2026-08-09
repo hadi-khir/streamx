@@ -79,8 +79,28 @@ export const watchProgress = sqliteTable(
 	(t) => [uniqueIndex('progress_unique').on(t.userId, t.connectionId, t.streamType, t.streamId)]
 );
 
+export const pinnedCategories = sqliteTable(
+	'pinned_categories',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		connectionId: integer('connection_id')
+			.notNull()
+			.references(() => connections.id, { onDelete: 'cascade' }),
+		contentType: text('content_type').notNull(), // 'live' | 'vod' | 'series'
+		categoryId: text('category_id').notNull(),
+		createdAt: integer('created_at')
+			.notNull()
+			.$defaultFn(() => Date.now())
+	},
+	(t) => [uniqueIndex('pin_unique').on(t.userId, t.connectionId, t.contentType, t.categoryId)]
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Connection = typeof connections.$inferSelect;
 export type Favorite = typeof favorites.$inferSelect;
 export type WatchProgress = typeof watchProgress.$inferSelect;
+export type PinnedCategory = typeof pinnedCategories.$inferSelect;

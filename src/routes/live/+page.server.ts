@@ -1,18 +1,21 @@
 import { requireConnection } from '$lib/server/connections';
+import { withPins } from '$lib/server/pins';
 import { getLiveCategories, getLiveStreams } from '$lib/server/xtream';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	const conn = requireConnection(locals.user!);
+	const user = locals.user!;
+	const conn = requireConnection(user);
 
-	let categories: { category_id: string; category_name: string }[] = [];
+	let rawCategories: { category_id: string; category_name: string }[] = [];
 	try {
-		categories = await getLiveCategories(conn);
+		rawCategories = await getLiveCategories(conn);
 	} catch {
 		// keep empty; page shows an error hint
 	}
+	const categories = withPins(user.id, conn.id, 'live', rawCategories);
 
-	const selected = url.searchParams.get('cat') ?? categories[0]?.category_id ?? 'all';
+	const selected = url.searchParams.get('cat') ?? categories[0]?.id ?? 'all';
 
 	let channels: { stream_id: number; name: string; stream_icon: string }[] = [];
 	let loadError = '';

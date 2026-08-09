@@ -23,14 +23,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.filter((r) => r.duration === 0 || r.position < r.duration * 0.95)
 		.slice(0, 12);
 
-	// Recently watched live channels
-	const recentLive = db
+	// Everything recently watched (any type), minus what's already in continue watching
+	const cwIds = new Set(inProgress.map((r) => r.id));
+	const recents = db
 		.select()
 		.from(watchProgress)
-		.where(and(eq(watchProgress.userId, userId), eq(watchProgress.streamType, 'live')))
+		.where(eq(watchProgress.userId, userId))
 		.orderBy(desc(watchProgress.updatedAt))
-		.limit(8)
-		.all();
+		.limit(24)
+		.all()
+		.filter((r) => !cwIds.has(r.id))
+		.slice(0, 12);
 
 	const favs = db
 		.select()
@@ -42,7 +45,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		continueWatching: inProgress,
-		recentLive,
+		recents,
 		favorites: favs,
 		hasConnection: locals.user!.activeConnectionId != null
 	};
