@@ -1,8 +1,44 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
 	import MediaCard from '$lib/components/MediaCard.svelte';
 	import type { WatchProgress, Favorite } from '$lib/server/db/schema';
 
 	let { data } = $props();
+
+	type Recent = (typeof data.recents)[number];
+
+	async function removeRecent(entry: Recent) {
+		const payload =
+			entry.kind === 'series'
+				? { seriesId: entry.seriesId, connectionId: entry.connectionId }
+				: { id: entry.id };
+		await fetch('/api/progress', {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload)
+		}).catch(() => null);
+		await invalidateAll();
+	}
+
+	function recentUrl(entry: Recent): string {
+		if (entry.kind === 'series') return `/series/${entry.seriesId}?conn=${entry.connectionId}`;
+		const q = new URLSearchParams({
+			name: entry.name,
+			icon: entry.icon ?? '',
+			conn: String(entry.connectionId)
+		});
+		if (entry.kind === 'live') return `/watch/live/${entry.streamId}?${q}`;
+		if (entry.ext) q.set('ext', entry.ext);
+		if (entry.seriesId) q.set('series', String(entry.seriesId));
+		return `/watch/${entry.kind === 'movie' ? 'movie' : 'series'}/${entry.streamId}?${q}`;
+	}
+
+	function recentLabel(entry: Recent): string {
+		if (entry.kind === 'live') return 'Live TV';
+		if (entry.kind === 'movie') return 'Movie';
+		if (entry.kind === 'series') return 'Series';
+		return 'Episode';
+	}
 
 	function resumeUrl(row: WatchProgress): string {
 		if (row.streamType === 'live') return liveUrl(row);
@@ -17,11 +53,6 @@
 		return `/watch/${type}/${row.streamId}?${q}`;
 	}
 
-	function typeLabel(row: WatchProgress): string {
-		if (row.streamType === 'live') return 'Live TV';
-		if (row.streamType === 'movie') return 'Movie';
-		return 'Episode';
-	}
 
 	function liveUrl(row: WatchProgress | Favorite): string {
 		const q = new URLSearchParams({
@@ -80,22 +111,32 @@
 				<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Recents</h2>
 				<div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
 					{#each data.recents as row (row.id)}
-						<a
-							href={resumeUrl(row)}
-							class="flex items-center gap-3 rounded-xl border border-surface-800 bg-surface-900 p-3 transition-colors hover:border-surface-600"
+						<div
+							class="group flex items-center gap-3 rounded-xl border border-surface-800 bg-surface-900 p-3 transition-colors hover:border-surface-600"
 						>
-							<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-800">
-								{#if row.icon}
-									<img src={row.icon} alt="" loading="lazy" class="max-h-full max-w-full object-contain" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
-								{:else}
-									<svg class="h-5 w-5 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-								{/if}
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm text-zinc-200">{row.name}</p>
-								<p class="text-xs text-zinc-500">{typeLabel(row)}</p>
-							</div>
-						</a>
+							<a href={recentUrl(row)} class="flex min-w-0 flex-1 items-center gap-3">
+								<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-800">
+									{#if row.icon}
+										<img src={row.icon} alt="" loading="lazy" class="max-h-full max-w-full object-contain" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
+									{:else}
+										<svg class="h-5 w-5 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+									{/if}
+								</div>
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm text-zinc-200">{row.name}</p>
+									<p class="text-xs text-zinc-500">{recentLabel(row)}</p>
+								</div>
+							</a>
+							<button
+								onclick={() => removeRecent(row)}
+								class="shrink-0 rounded-lg p-1.5 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-800 hover:text-zinc-200 focus-visible:opacity-100"
+								title="Remove from recents"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
 					{/each}
 				</div>
 			</section>

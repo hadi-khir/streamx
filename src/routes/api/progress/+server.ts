@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { watchProgress } from '$lib/server/db/schema';
 import { requireConnectionApi } from '$lib/server/connections';
@@ -49,5 +50,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		})
 		.run();
 
+	return json({ ok: true });
+};
+
+/**
+ * Remove watch history. Pass { id } for a single entry, or
+ * { seriesId, connectionId } to clear every episode of a series.
+ */
+export const DELETE: RequestHandler = async ({ request, locals }) => {
+	const user = locals.user!;
+	const body = await request.json().catch(() => null);
+
+	if (body?.seriesId && body?.connectionId) {
+		db.delete(watchProgress)
+			.where(
+				and(
+					eq(watchProgress.userId, user.id),
+					eq(watchProgress.connectionId, Number(body.connectionId)),
+					eq(watchProgress.streamType, 'episode'),
+					eq(watchProgress.seriesId, Number(body.seriesId))
+				)
+			)
+			.run();
+		return json({ ok: true });
+	}
+
+	const id = Number(body?.id);
+	if (!id) error(400, 'Invalid progress id');
+	db.delete(watchProgress)
+		.where(and(eq(watchProgress.id, id), eq(watchProgress.userId, user.id)))
+		.run();
 	return json({ ok: true });
 };
