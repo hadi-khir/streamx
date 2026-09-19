@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import FallbackImage from '$lib/components/FallbackImage.svelte';
 	import { tmdbFallback } from '$lib/images';
 
@@ -16,6 +17,7 @@
 	});
 
 	const season = $derived(data.seasons.find((s) => s.season === selectedSeason));
+	const allEpisodes = $derived(data.seasons.flatMap((s) => s.episodes));
 
 	function episodeUrl(ep: { id: number; title: string; ext: string; image: string | null }): string {
 		const q = new URLSearchParams({
@@ -26,6 +28,13 @@
 			series: String(data.seriesId)
 		});
 		return `/watch/series/${ep.id}?${q}`;
+	}
+
+	/** Jump to a random episode across every season. */
+	function playRandomEpisode() {
+		if (!allEpisodes.length) return;
+		const ep = allEpisodes[Math.floor(Math.random() * allEpisodes.length)];
+		goto(episodeUrl(ep));
 	}
 
 	async function toggleFavorite() {
@@ -82,15 +91,33 @@
 			<div class="min-w-0 flex-1">
 				<div class="flex items-start justify-between gap-3">
 					<h1 class="text-3xl font-bold">{data.name}</h1>
-					<button
-						onclick={toggleFavorite}
-						class="shrink-0 rounded-xl border border-surface-700 p-2.5 transition-colors {favorited ? 'border-red-400/40 text-red-400' : 'text-zinc-400 hover:text-white'}"
-						title={favorited ? 'Remove from favorites' : 'Add to favorites'}
-					>
-						<svg class="h-5 w-5" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-						</svg>
-					</button>
+					<div class="flex shrink-0 items-center gap-2">
+						{#if allEpisodes.length}
+							<button
+								onclick={playRandomEpisode}
+								class="flex items-center gap-1.5 rounded-xl border border-surface-700 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:text-white"
+								title="Play a random episode"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+									<path d="M16 3h5v5" />
+									<path d="M4 20 21 3" />
+									<path d="M21 16v5h-5" />
+									<path d="m15 15 6 6" />
+									<path d="m4 4 5 5" />
+								</svg>
+								Random
+							</button>
+						{/if}
+						<button
+							onclick={toggleFavorite}
+							class="rounded-xl border border-surface-700 p-2.5 transition-colors {favorited ? 'border-red-400/40 text-red-400' : 'text-zinc-400 hover:text-white'}"
+							title={favorited ? 'Remove from favorites' : 'Add to favorites'}
+						>
+							<svg class="h-5 w-5" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+							</svg>
+						</button>
+					</div>
 				</div>
 
 				<div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-zinc-400">
