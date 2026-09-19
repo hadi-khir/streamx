@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import VideoPlayer from '$lib/components/VideoPlayer.svelte';
+	import { episodeWatchUrl } from '$lib/episodes';
 
 	let { data } = $props();
 
@@ -9,6 +11,26 @@
 	});
 
 	const nowPlaying = $derived(data.epg.find((e) => e.now));
+
+	const next = $derived(data.nextEpisode);
+	const nextUp = $derived(
+		next ? { title: `S${next.season} E${next.num} · ${next.title}`, image: next.image } : null
+	);
+
+	function playNext() {
+		if (!next || !data.seriesId) return;
+		goto(
+			episodeWatchUrl(
+				{
+					seriesId: data.seriesId,
+					seriesName: data.seriesName || data.name,
+					connId: data.connectionId,
+					poster: data.seriesPoster
+				},
+				next
+			)
+		);
+	}
 
 	async function toggleFavorite() {
 		favorited = !favorited;
@@ -96,6 +118,8 @@
 				live={data.type === 'live'}
 				initialPosition={data.savedPosition}
 				onProgress={reportProgress}
+				{nextUp}
+				onPlayNext={nextUp ? playNext : undefined}
 			/>
 		</div>
 	</div>

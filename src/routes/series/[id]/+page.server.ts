@@ -5,18 +5,10 @@ import { favorites, watchProgress } from '$lib/server/db/schema';
 import { requireConnection } from '$lib/server/connections';
 import { getSeriesInfo } from '$lib/server/xtream';
 import { lookup } from '$lib/server/tmdb';
+import { groupEpisodes, type SeriesEpisode } from '$lib/server/series';
 import type { PageServerLoad } from './$types';
 
-export interface Episode {
-	id: number;
-	num: number;
-	title: string;
-	ext: string;
-	image: string | null;
-	plot: string | null;
-	durationSecs: number | null;
-	progressPct: number;
-}
+export type Episode = SeriesEpisode & { progressPct: number };
 
 export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const user = locals.user!;
@@ -55,31 +47,10 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		progressRows.map((r) => [r.streamId, r.duration > 0 ? r.position / r.duration : 0])
 	);
 
-	// Season covers double as episode-thumb fallbacks when a still is missing
-	const seasonCovers = new Map<string, string>();
-	for (const s of Array.isArray(data.seasons) ? data.seasons : []) {
-		const cover = s.cover_big || s.cover || s.cover_tmdb;
-		if (cover && s.season_number != null) seasonCovers.set(String(s.season_number), cover);
-	}
-
-	const seasons: { season: string; episodes: Episode[] }[] = [];
-	const episodesBySeason = data.episodes ?? {};
-	for (const season of Object.keys(episodesBySeason).sort((a, b) => Number(a) - Number(b))) {
-		const eps = (episodesBySeason[season] ?? []).map((e: any): Episode => {
-			const id = Number(e.id);
-			return {
-				id,
-				num: Number(e.episode_num) || 0,
-				title: e.title || `Episode ${e.episode_num}`,
-				ext: e.container_extension || 'mp4',
-				image: e.info?.movie_image || seasonCovers.get(String(e.season ?? season)) || null,
-				plot: e.info?.plot || null,
-				durationSecs: e.info?.duration_secs ? Number(e.info.duration_secs) : null,
-				progressPct: Math.min(1, progressMap.get(id) ?? 0)
-			};
-		});
-		if (eps.length) seasons.push({ season, episodes: eps });
-	}
+	const seasons: { season: string; episodes: Episode[] }[] = groupEpisodes(data).map((s) => ({
+		season: s.season,
+		episodes: s.episodes.map((e) => ({ ...e, progressPct: Math.min(1, progressMap.get(e.id) ?? 0) }))
+	}));
 
 	// When the provider lists seasons but no episodes (placeholder entries),
 	// surface the season metadata so the page can explain what's missing.

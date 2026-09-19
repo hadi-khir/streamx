@@ -12,13 +12,21 @@
 		attempts,
 		live = false,
 		initialPosition = 0,
-		onProgress
+		onProgress,
+		nextUp = null,
+		onPlayNext
 	}: {
 		attempts: Attempt[];
 		live?: boolean;
 		initialPosition?: number;
 		onProgress?: (position: number, duration: number) => void;
+		/** Shown as an up-next card when playback ends; omit to disable autoplay. */
+		nextUp?: { title: string; image: string | null } | null;
+		onPlayNext?: () => void;
 	} = $props();
+
+	/** Seconds the up-next card counts down before playing automatically. */
+	const NEXT_DELAY = 10;
 
 	const VOLUME_KEY = 'streamx:volume';
 	const MUTED_KEY = 'streamx:muted';
@@ -46,10 +54,13 @@
 	let currentAudioTrack = $state(-1);
 	let audioCheckGen = $state(0);
 
+	let countdown = $state(0);
+
 	let attempt = 0; // generation counter to invalidate stale callbacks
 	let seeked = false;
 	let hideTimer: ReturnType<typeof setTimeout>;
 	let audioCheckTimer: ReturnType<typeof setTimeout>;
+	let countdownTimer: ReturnType<typeof setInterval>;
 
 	function log(line: string) {
 		debugInfo = [...debugInfo.slice(-7), line];
@@ -184,6 +195,7 @@
 		audioTracks = [];
 		currentAudioTrack = -1;
 		seeked = false;
+		cancelNext();
 		attempt++;
 		const generation = attempt;
 		const stale = () => attempt !== generation;
@@ -258,6 +270,7 @@
 	onDestroy(() => {
 		clearTimeout(hideTimer);
 		clearTimeout(audioCheckTimer);
+		clearInterval(countdownTimer);
 		cleanup();
 	});
 
@@ -288,6 +301,31 @@
 	function togglePlay() {
 		if (video.paused) attemptPlay();
 		else video.pause();
+	}
+
+	function cancelNext() {
+		clearInterval(countdownTimer);
+		countdown = 0;
+	}
+
+	function playNext() {
+		cancelNext();
+		onPlayNext?.();
+	}
+
+	function onEnded() {
+		if (live) return;
+		// Mark the episode finished so it resumes from the start, not the last
+		// periodic ping a few seconds short of the end.
+		if (isFinite(video.duration) && video.duration > 0) onProgress?.(video.duration, video.duration);
+		if (!nextUp || !onPlayNext) return;
+		showControls = true;
+		countdown = NEXT_DELAY;
+		clearInterval(countdownTimer);
+		countdownTimer = setInterval(() => {
+			countdown -= 1;
+			if (countdown <= 0) playNext();
+		}, 1000);
 	}
 
 	function toggleMute() {
@@ -392,6 +430,7 @@
 			buffering = false;
 		}}
 		onloadedmetadata={onLoadedMetadata}
+		onended={onEnded}
 	></video>
 
 	{#if status === 'loading'}
@@ -467,6 +506,44 @@
 		</div>
 	{/if}
 
+	{#if countdown > 0 && nextUp}
+		<div class="absolute inset-0 flex items-center justify-center bg-black/80 p-4">
+			<div class="w-full max-w-sm rounded-2xl border border-surface-800 bg-surface-900/95 p-4 shadow-2xl">
+				<p class="text-xs font-medium tracking-wide text-zinc-500 uppercase">Up next</p>
+				<div class="mt-3 flex items-center gap-3">
+					{#if nextUp.image}
+						<img src={nextUp.image} alt="" class="h-14 w-24 shrink-0 rounded-lg bg-surface-800 object-cover" />
+					{/if}
+					<p class="min-w-0 flex-1 text-sm font-medium text-zinc-100">{nextUp.title}</p>
+				</div>
+				<div class="mt-4 h-1 overflow-hidden rounded-full bg-white/10">
+					<div
+						class="h-full rounded-full bg-accent transition-[width] duration-1000 ease-linear"
+						style="width: {(countdown / NEXT_DELAY) * 100}%"
+					></div>
+				</div>
+				<div class="mt-4 flex gap-2">
+					<button
+						onclick={playNext}
+						class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+					>
+						<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+						Play now
+					</button>
+					<button
+						onclick={cancelNext}
+						class="rounded-lg border border-surface-700 px-4 py-2 text-sm text-zinc-400 transition-colors hover:text-white"
+					>
+						Cancel
+					</button>
+				</div>
+				<p class="mt-3 text-center text-xs text-zinc-500">
+					Playing in {countdown}s
+				</p>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Controls -->
 	<div
 		class="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 pt-12 transition-opacity duration-300
@@ -490,6 +567,12 @@
 					<svg class="h-7 w-7" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
 				{/if}
 			</button>
+
+			{#if nextUp && onPlayNext}
+				<button onclick={playNext} class="text-white transition-colors hover:text-accent" title="Next episode">
+					<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5v14l9-7zM16 5h3v14h-3z" /></svg>
+				</button>
+			{/if}
 
 			{#if live}
 				<span class="flex items-center gap-1.5 text-xs text-red-400">

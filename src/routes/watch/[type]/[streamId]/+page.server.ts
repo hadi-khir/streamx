@@ -3,7 +3,8 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { favorites, watchProgress } from '$lib/server/db/schema';
 import { requireConnection } from '$lib/server/connections';
-import { getShortEpg, type EpgListing } from '$lib/server/xtream';
+import { getSeriesInfo, getShortEpg, type EpgListing } from '$lib/server/xtream';
+import { groupEpisodes, type SeriesEpisode } from '$lib/server/series';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url, locals }) => {
@@ -99,6 +100,24 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 				.get() != null;
 	}
 
+	// Up-next episode for autoplay. Best-effort: get_series_info is cached for
+	// 5 minutes, so arriving from the series page is normally a cache hit.
+	let nextEpisode: SeriesEpisode | null = null;
+	let seriesName = '';
+	let seriesPoster: string | null = null;
+	if (type === 'series' && seriesId) {
+		try {
+			const info = await getSeriesInfo(conn, seriesId);
+			seriesName = info.info?.name || name.split(' — ')[0];
+			seriesPoster = info.info?.cover || null;
+			const ordered = groupEpisodes(info).flatMap((s) => s.episodes);
+			const idx = ordered.findIndex((e) => e.id === numericId);
+			if (idx >= 0 && idx + 1 < ordered.length) nextEpisode = ordered[idx + 1];
+		} catch {
+			// Autoplay is a nicety — never block playback on the provider
+		}
+	}
+
 	// Program guide for live channels
 	let epg: EpgListing[] = [];
 	if (type === 'live') {
@@ -121,6 +140,9 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		savedPosition,
 		favorited,
 		epg,
-		progressType
+		progressType,
+		nextEpisode,
+		seriesName,
+		seriesPoster
 	};
 };

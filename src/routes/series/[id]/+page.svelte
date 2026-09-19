@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import FallbackImage from '$lib/components/FallbackImage.svelte';
 	import { tmdbFallback } from '$lib/images';
+	import { episodeWatchUrl, type EpisodeLink } from '$lib/episodes';
 
 	let { data } = $props();
 
@@ -19,15 +20,16 @@
 	const season = $derived(data.seasons.find((s) => s.season === selectedSeason));
 	const allEpisodes = $derived(data.seasons.flatMap((s) => s.episodes));
 
-	function episodeUrl(ep: { id: number; title: string; ext: string; image: string | null }): string {
-		const q = new URLSearchParams({
-			name: `${data.name} — ${ep.title}`,
-			icon: ep.image ?? data.poster ?? '',
-			conn: String(data.connId),
-			ext: ep.ext,
-			series: String(data.seriesId)
-		});
-		return `/watch/series/${ep.id}?${q}`;
+	function episodeUrl(ep: EpisodeLink): string {
+		return episodeWatchUrl(
+			{
+				seriesId: data.seriesId,
+				seriesName: data.name,
+				connId: data.connId,
+				poster: data.poster
+			},
+			ep
+		);
 	}
 
 	/** Jump to a random episode across every season. */
