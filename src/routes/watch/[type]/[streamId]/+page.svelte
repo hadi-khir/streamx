@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import VideoPlayer from '$lib/components/VideoPlayer.svelte';
 	import { episodeWatchUrl } from '$lib/episodes';
+	import { downloadUrl } from '$lib/download';
 
 	let { data } = $props();
 
@@ -11,6 +12,19 @@
 	});
 
 	const nowPlaying = $derived(data.epg.find((e) => e.now));
+
+	// Live has nothing to save; VOD can go to the device for offline viewing
+	const saveUrl = $derived(
+		data.type === 'live'
+			? null
+			: downloadUrl({
+					connId: data.connectionId,
+					type: data.type,
+					streamId: data.streamId,
+					ext: data.ext,
+					name: data.name
+				})
+	);
 
 	const next = $derived(data.nextEpisode);
 	const nextUp = $derived(
@@ -98,6 +112,19 @@
 				{nowPlaying ? ` — ${data.name}` : ''}
 			</p>
 		</div>
+		{#if saveUrl}
+			<a
+				href={saveUrl}
+				download
+				class="rounded-lg p-2 text-zinc-400 transition-colors hover:text-white"
+				title="Download for offline viewing"
+				aria-label="Download for offline viewing"
+			>
+				<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+				</svg>
+			</a>
+		{/if}
 		{#if data.type === 'live' || data.type === 'movie'}
 			<button
 				onclick={toggleFavorite}

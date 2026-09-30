@@ -3,6 +3,7 @@
 	import FallbackImage from '$lib/components/FallbackImage.svelte';
 	import { tmdbFallback } from '$lib/images';
 	import { episodeWatchUrl, type EpisodeLink } from '$lib/episodes';
+	import { downloadUrl } from '$lib/download';
 
 	let { data } = $props();
 
@@ -30,6 +31,16 @@
 			},
 			ep
 		);
+	}
+
+	function episodeDownloadUrl(ep: EpisodeLink): string {
+		return downloadUrl({
+			connId: data.connId,
+			type: 'series',
+			streamId: ep.id,
+			ext: ep.ext,
+			name: `${data.name} - ${ep.title}`
+		});
 	}
 
 	/** Jump to a random episode across every season. */
@@ -178,34 +189,46 @@
 
 				<div class="mt-4 space-y-2">
 					{#each season?.episodes ?? [] as ep (ep.id)}
-						<a
-							href={episodeUrl(ep)}
+						<div
 							class="flex items-center gap-4 rounded-xl border border-surface-800 bg-surface-900 p-3 transition-colors hover:border-surface-600"
 						>
-							<div class="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-surface-800 sm:h-16 sm:w-28">
-								<FallbackImage
-									sources={[ep.image, tmdbFallback(ep.image), data.poster]}
-									imgClass="h-full w-full object-cover"
-								/>
-								{#if ep.progressPct > 0}
-									<div class="absolute right-0 bottom-0 left-0 h-1 bg-black/50">
-										<div class="h-full bg-accent" style="width: {ep.progressPct * 100}%"></div>
-									</div>
+							<a href={episodeUrl(ep)} class="flex min-w-0 flex-1 items-center gap-4">
+								<div class="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-surface-800 sm:h-16 sm:w-28">
+									<FallbackImage
+										sources={[ep.image, tmdbFallback(ep.image), data.poster]}
+										imgClass="h-full w-full object-cover"
+									/>
+									{#if ep.progressPct > 0}
+										<div class="absolute right-0 bottom-0 left-0 h-1 bg-black/50">
+											<div class="h-full bg-accent" style="width: {ep.progressPct * 100}%"></div>
+										</div>
+									{/if}
+								</div>
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium text-zinc-200">
+										<span class="mr-2 text-zinc-500">E{ep.num}</span>{ep.title}
+									</p>
+									{#if ep.plot}
+										<p class="mt-0.5 line-clamp-2 text-xs text-zinc-500">{ep.plot}</p>
+									{/if}
+								</div>
+								{#if ep.durationSecs}
+									<span class="shrink-0 text-xs text-zinc-500">{fmtDuration(ep.durationSecs)}</span>
 								{/if}
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium text-zinc-200">
-									<span class="mr-2 text-zinc-500">E{ep.num}</span>{ep.title}
-								</p>
-								{#if ep.plot}
-									<p class="mt-0.5 line-clamp-2 text-xs text-zinc-500">{ep.plot}</p>
-								{/if}
-							</div>
-							{#if ep.durationSecs}
-								<span class="shrink-0 text-xs text-zinc-500">{fmtDuration(ep.durationSecs)}</span>
-							{/if}
-							<svg class="h-5 w-5 shrink-0 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-						</a>
+								<svg class="h-5 w-5 shrink-0 text-zinc-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+							</a>
+							<a
+								href={episodeDownloadUrl(ep)}
+								download
+								class="shrink-0 rounded-lg p-2 text-zinc-600 transition-colors hover:bg-surface-800 hover:text-zinc-200"
+								title="Download this episode"
+								aria-label="Download episode {ep.num}"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+								</svg>
+							</a>
+						</div>
 					{/each}
 				</div>
 			{/if}

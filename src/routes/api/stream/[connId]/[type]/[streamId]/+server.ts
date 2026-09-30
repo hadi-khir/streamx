@@ -4,6 +4,42 @@ import { buildStreamUrl } from '$lib/server/xtream';
 import type { RequestHandler } from './$types';
 
 const UA = 'StreamX/1.0';
+const HEADER_TIMEOUT = 30_000;
+
+/**
+ * Give the provider 30s to answer, then let the body run as long as it needs.
+ * A plain AbortSignal.timeout covers the whole response, which cuts a movie
+ * off mid-transfer — fatal for a download, and for any player that streams a
+ * title over one long request instead of re-asking by range.
+ */
+async function openStream(url: string, headers: Record<string, string>): Promise<Response> {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), HEADER_TIMEOUT);
+	try {
+		return await fetch(url, { signal: controller.signal, headers, redirect: 'follow' });
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** Turn a provider title into something a filesystem will accept. */
+function attachmentHeader(rawName: string, ext: string): string {
+	const base =
+		rawName
+			.replace(/[\\/:*?"<>|]/g, ' ')
+			.replace(/[\u0000-\u001f\u007f]/g, '')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.slice(0, 120) || 'video';
+	const filename = `${base}.${ext}`;
+	const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '');
+	// RFC 5987 leaves ' ( ) ! * out of attr-char, and encodeURIComponent keeps them
+	const utf8 = encodeURIComponent(filename).replace(
+		/['()!*]/g,
+		(ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`
+	);
+	return `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
+}
 
 /**
  * Proxies streams through the backend so provider credentials never reach the
@@ -19,6 +55,13 @@ export const GET: RequestHandler = async ({ params, url, request, locals }) => {
 
 	const ext = url.searchParams.get('ext') ?? 'm3u8';
 	if (!/^[a-zA-Z0-9]{1,10}$/.test(ext)) error(400, 'Invalid extension');
+
+	// Saving to the device: VOD only, and never a playlist — an .m3u8 file on
+	// its own plays nothing offline.
+	const download = url.searchParams.get('download') === '1';
+	if (download && (type === 'live' || ext === 'm3u8')) {
+		error(400, 'Only movies and episodes can be downloaded');
+	}
 
 	const proxyBase = `/api/stream/${conn.id}/${type}/${streamId}`;
 
@@ -92,11 +135,7 @@ export const GET: RequestHandler = async ({ params, url, request, locals }) => {
 	const range = request.headers.get('range');
 	if (range) fetchHeaders.Range = range;
 
-	const upstream = await fetch(streamUrl, {
-		signal: AbortSignal.timeout(30_000),
-		headers: fetchHeaders,
-		redirect: 'follow'
-	});
+	const upstream = await openStream(streamUrl, fetchHeaders);
 
 	if (!upstream.ok && upstream.status !== 206) {
 		error(upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502, 'Stream not available');
@@ -129,6 +168,12 @@ export const GET: RequestHandler = async ({ params, url, request, locals }) => {
 	for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
 		const val = upstream.headers.get(h);
 		if (val) headers.set(h, val);
+	}
+	if (download) {
+		headers.set('Content-Disposition', attachmentHeader(url.searchParams.get('name') ?? '', ext));
+		// Providers label VOD inconsistently; a generic type keeps the browser
+		// from trying to render the file instead of saving it.
+		if (!headers.get('content-type')) headers.set('Content-Type', 'application/octet-stream');
 	}
 
 	return new Response(upstream.body, { status: upstream.status, headers });

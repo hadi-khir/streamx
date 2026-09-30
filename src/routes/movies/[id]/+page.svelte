@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { downloadUrl } from '$lib/download';
+
 	let { data } = $props();
 
 	let favorited = $state(false);
@@ -15,6 +17,16 @@
 		});
 		return `/watch/movie/${data.streamId}?${q}`;
 	});
+
+	const saveUrl = $derived(
+		downloadUrl({
+			connId: data.connId,
+			type: 'movie',
+			streamId: data.streamId,
+			ext: data.ext,
+			name: data.name
+		})
+	);
 
 	const resumePct = $derived(
 		data.progress && data.progress.duration > 0
@@ -115,6 +127,17 @@
 					>
 						<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
 						{resumePct > 0 && resumePct < 95 ? 'Resume' : 'Play'}
+					</a>
+					<a
+						href={saveUrl}
+						download
+						class="flex items-center gap-2 rounded-xl border border-surface-700 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:text-white"
+						title="Save this movie to your device for offline viewing"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+						</svg>
+						Download
 					</a>
 					<button
 						onclick={toggleFavorite}
