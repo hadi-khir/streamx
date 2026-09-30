@@ -1,8 +1,8 @@
 import { json, error } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { watchProgress } from '$lib/server/db/schema';
-import { requireConnectionApi } from '$lib/server/connections';
+import { connections, watchProgress } from '$lib/server/db/schema';
+import { getConnection, requireConnectionApi } from '$lib/server/connections';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -54,19 +54,43 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 };
 
 /**
- * Remove watch history. Pass { id } for a single entry, or
- * { seriesId, connectionId } to clear every episode of a series.
+ * Remove watch history. Pass { id } for a single entry, { seriesId,
+ * connectionId } to clear every episode of a series, and { ids } for the
+ * extra rows a collapsed home card stands for — a card that swallowed a
+ * same-named 24/7 channel has to take that channel with it, or it reappears
+ * the moment the series is gone.
  */
 export const DELETE: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user!;
 	const body = await request.json().catch(() => null);
 
+	const ids = Array.isArray(body?.ids)
+		? body.ids.map(Number).filter((n: number) => Number.isInteger(n) && n > 0)
+		: [];
+	if (ids.length) {
+		db.delete(watchProgress)
+			.where(and(eq(watchProgress.userId, user.id), inArray(watchProgress.id, ids)))
+			.run();
+	}
+
 	if (body?.seriesId && body?.connectionId) {
+		// Same series under a second login on the same server is the same
+		// show on the home row, so clear it everywhere that provider appears.
+		const conn = getConnection(user.id, Number(body.connectionId));
+		const siblings = conn
+			? db
+					.select({ id: connections.id })
+					.from(connections)
+					.where(and(eq(connections.userId, user.id), eq(connections.serverUrl, conn.serverUrl)))
+					.all()
+					.map((c) => c.id)
+			: [Number(body.connectionId)];
+
 		db.delete(watchProgress)
 			.where(
 				and(
 					eq(watchProgress.userId, user.id),
-					eq(watchProgress.connectionId, Number(body.connectionId)),
+					inArray(watchProgress.connectionId, siblings),
 					eq(watchProgress.streamType, 'episode'),
 					eq(watchProgress.seriesId, Number(body.seriesId))
 				)
@@ -76,7 +100,10 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const id = Number(body?.id);
-	if (!id) error(400, 'Invalid progress id');
+	if (!id) {
+		if (ids.length) return json({ ok: true });
+		error(400, 'Invalid progress id');
+	}
 	db.delete(watchProgress)
 		.where(and(eq(watchProgress.id, id), eq(watchProgress.userId, user.id)))
 		.run();

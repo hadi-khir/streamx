@@ -1,6 +1,12 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { favorites, watchProgress, type Connection, type WatchProgress } from '$lib/server/db/schema';
+import {
+	connections,
+	favorites,
+	watchProgress,
+	type Connection,
+	type WatchProgress
+} from '$lib/server/db/schema';
 import { getConnection, listConnections } from '$lib/server/connections';
 import { withPins } from '$lib/server/pins';
 import {
@@ -11,13 +17,67 @@ import {
 	getVodCategories,
 	getVodStreams
 } from '$lib/server/xtream';
-import { adultCategoryIds, isAdultCategory, parseRating, pickPopular, roundRobin } from '$lib/server/popular';
+import {
+	isAdultCategory,
+	isEnglishCategory,
+	isPlayableTitle,
+	parseRating,
+	roundRobin,
+	titleKey,
+	uniqueByTitle
+} from '$lib/server/popular';
+import type { Category } from '$lib/server/xtream';
 import type { PageServerLoad } from './$types';
 
 const ROW_SIZE = 20;
-// Home rows come from the full catalog listings, which are big on most
-// providers. They stream in, so a slow provider delays a row, not the page.
-const CATALOG_TIMEOUT = 45_000;
+// How many categories feed one row, and how many titles each contributes.
+const ROW_CATEGORIES = 6;
+const PER_CATEGORY = 6;
+// Rows are built per category: the unfiltered get_series / get_vod_streams
+// listings never return on some providers, while a single category answers in
+// a second or two. Rows stream in, so a slow category delays a row, not the page.
+const CATEGORY_TIMEOUT = 25_000;
+
+interface RowItem {
+	id: number;
+	name: string;
+	image: string;
+	rating: number;
+}
+
+/**
+ * The categories a home row draws from: English only (the home page is not a
+ * language tour), never adult, and your pinned ones win when you have any.
+ * Providers that tag no language would leave the row empty, so there the
+ * filter relaxes rather than showing nothing.
+ */
+function rowCategories(
+	userId: string,
+	connectionId: number,
+	contentType: 'live' | 'vod' | 'series',
+	categories: Category[]
+) {
+	const usable = withPins(userId, connectionId, contentType, categories).filter(
+		(c) => !isAdultCategory(c.name)
+	);
+	const english = usable.filter((c) => isEnglishCategory(c.name));
+	const pool = english.length ? english : usable;
+	const pinned = pool.filter((c) => c.pinned);
+	return (pinned.length ? pinned : pool).slice(0, ROW_CATEGORIES);
+}
+
+/** One category's contribution to a row: its best-rated titles with artwork. */
+function topRated(items: { id: number; name: string; image: unknown; rating: unknown }[]): RowItem[] {
+	return items
+		.flatMap((i) => {
+			const rating = parseRating(i.rating as string | number | null);
+			const image = typeof i.image === 'string' ? i.image : '';
+			if (!rating || !image || !isPlayableTitle(i.name)) return [];
+			return [{ id: i.id, name: i.name, image, rating }];
+		})
+		.sort((a, b) => b.rating - a.rating)
+		.slice(0, PER_CATEGORY);
+}
 
 export interface RecentEntry {
 	id: number;
@@ -34,16 +94,17 @@ export interface RecentEntry {
 	position: number;
 	resumable: boolean;
 	progress: number;
+	/** Every progress row this one card stands for — what "remove" must clear */
+	absorbed: number[];
 }
 
-/** Started, not finished — worth dropping straight back into. */
 function resumable(row: WatchProgress): boolean {
 	if (row.streamType === 'live') return false;
 	if (row.position <= 60) return false;
 	return row.duration === 0 || row.position < row.duration * 0.95;
 }
 
-function toEntry(row: WatchProgress): RecentEntry {
+function toEntry(row: WatchProgress, absorbed: number[]): RecentEntry {
 	const isEpisode = row.streamType === 'episode' && row.seriesId != null;
 	// Progress rows store episodes as "Series Name — Episode Title"
 	const [series, ...episode] = row.name.split(' — ');
@@ -67,7 +128,8 @@ function toEntry(row: WatchProgress): RecentEntry {
 		ext: row.ext,
 		position: row.position,
 		resumable: canResume,
-		progress: canResume && row.duration > 0 ? row.position / row.duration : 0
+		progress: canResume && row.duration > 0 ? row.position / row.duration : 0,
+		absorbed
 	};
 }
 
@@ -77,6 +139,17 @@ function toEntry(row: WatchProgress): RecentEntry {
  * left unfinished, falling back to the last one you opened.
  */
 function recentlyWatched(userId: string): RecentEntry[] {
+	// Two logins on the same server are the same library, so history groups
+	// per provider rather than per connection.
+	const provider = new Map(
+		db
+			.select({ id: connections.id, serverUrl: connections.serverUrl })
+			.from(connections)
+			.where(eq(connections.userId, userId))
+			.all()
+			.map((c) => [c.id, c.serverUrl.replace(/\/+$/, '').toLowerCase()] as const)
+	);
+
 	const rows = db
 		.select()
 		.from(watchProgress)
@@ -86,103 +159,109 @@ function recentlyWatched(userId: string): RecentEntry[] {
 		.all();
 
 	const order: string[] = [];
-	const chosen = new Map<string, WatchProgress>();
+	const groups = new Map<string, { chosen: WatchProgress; ids: number[] }>();
 	for (const row of rows) {
+		const host = provider.get(row.connectionId) ?? String(row.connectionId);
 		const key =
 			row.streamType === 'episode' && row.seriesId != null
-				? `series:${row.connectionId}:${row.seriesId}`
-				: `${row.streamType}:${row.connectionId}:${row.streamId}`;
-		const prev = chosen.get(key);
-		if (!prev) {
-			chosen.set(key, row);
+				? `series:${host}:${row.seriesId}`
+				: `${row.streamType}:${host}:${row.streamId}`;
+		const group = groups.get(key);
+		if (!group) {
+			groups.set(key, { chosen: row, ids: [row.id] });
 			order.push(key);
-		} else if (!resumable(prev) && resumable(row)) {
-			// Keep the show's slot where it is, but resume instead of restarting
-			chosen.set(key, row);
+			continue;
+		}
+		group.ids.push(row.id);
+		// Keep the show's slot where it is, but resume instead of restarting
+		if (!resumable(group.chosen) && resumable(row)) group.chosen = row;
+	}
+
+	// Providers ship popular shows twice — as a series and as a 24/7 channel
+	// of the same name. They are different streams, but on one row they read
+	// as a duplicate, so the series or movie wins and swallows the channel.
+	const out: RecentEntry[] = [];
+	const slotOfShow = new Map<string, number>();
+	for (const key of order) {
+		const group = groups.get(key)!;
+		const entry = toEntry(group.chosen, group.ids);
+		const show = titleKey(entry.title);
+		const slot = show ? slotOfShow.get(show) : undefined;
+		if (slot == null) {
+			if (show) slotOfShow.set(show, out.length);
+			out.push(entry);
+			continue;
+		}
+		const kept = out[slot];
+		kept.absorbed.push(...entry.absorbed);
+		if (kept.kind === 'live' && entry.kind !== 'live') {
+			out[slot] = { ...entry, absorbed: kept.absorbed };
 		}
 	}
 
-	return order.slice(0, ROW_SIZE).map((key) => toEntry(chosen.get(key)!));
+	return out.slice(0, ROW_SIZE);
 }
 
-async function popularShows(conn: Connection) {
+async function popularShows(userId: string, conn: Connection) {
 	try {
-		const [cats, list] = await Promise.all([
-			getSeriesCategories(conn),
-			getSeries(conn, null, CATALOG_TIMEOUT)
-		]);
-		const skip = adultCategoryIds(cats ?? []);
-		const rated = (list ?? []).flatMap((s) => {
-			const rating = parseRating(s.rating);
-			if (!rating || !s.cover || !s.name || skip.has(s.category_id)) return [];
-			return [
-				{
-					id: s.series_id,
-					name: s.name,
-					image: s.cover,
-					rating,
-					categoryId: s.category_id ?? ''
-				}
-			];
-		});
-		return pickPopular(rated, ROW_SIZE);
+		const cats = rowCategories(userId, conn.id, 'series', (await getSeriesCategories(conn)) ?? []);
+		const lists = await Promise.all(
+			cats.map((c) =>
+				getSeries(conn, c.id, CATEGORY_TIMEOUT)
+					.then((list) =>
+						topRated((list ?? []).map((s) => ({ id: s.series_id, name: s.name, image: s.cover, rating: s.rating })))
+					)
+					// A category that times out costs its slice of the row, nothing more
+					.catch(() => [])
+			)
+		);
+		return uniqueByTitle(roundRobin(lists, ROW_SIZE * 2)).slice(0, ROW_SIZE);
 	} catch {
 		// A dead row beats a dead page
 		return [];
 	}
 }
 
-async function popularMovies(conn: Connection) {
+async function popularMovies(userId: string, conn: Connection) {
 	try {
-		const [cats, list] = await Promise.all([
-			getVodCategories(conn),
-			getVodStreams(conn, null, CATALOG_TIMEOUT)
-		]);
-		const skip = adultCategoryIds(cats ?? []);
-		const rated = (list ?? []).flatMap((m) => {
-			const rating = parseRating(m.rating);
-			if (!rating || !m.stream_icon || !m.name || skip.has(m.category_id)) return [];
-			return [
-				{
-					id: m.stream_id,
-					name: m.name,
-					image: m.stream_icon,
-					rating,
-					categoryId: m.category_id ?? ''
-				}
-			];
-		});
-		return pickPopular(rated, ROW_SIZE);
+		const cats = rowCategories(userId, conn.id, 'vod', (await getVodCategories(conn)) ?? []);
+		const lists = await Promise.all(
+			cats.map((c) =>
+				getVodStreams(conn, c.id, CATEGORY_TIMEOUT)
+					.then((list) =>
+						topRated(
+							(list ?? []).map((m) => ({ id: m.stream_id, name: m.name, image: m.stream_icon, rating: m.rating }))
+						)
+					)
+					.catch(() => [])
+			)
+		);
+		return uniqueByTitle(roundRobin(lists, ROW_SIZE * 2)).slice(0, ROW_SIZE);
 	} catch {
 		return [];
 	}
 }
 
 /**
- * Channels have no rating to sort on, so the row follows your own signal:
- * pinned live categories, or the provider's first few when nothing is pinned.
+ * Channels have no rating to sort on, so the row is simply the head of each
+ * category it draws from.
  */
 async function liveChannels(userId: string, conn: Connection) {
 	try {
-		const cats = withPins(userId, conn.id, 'live', (await getLiveCategories(conn)) ?? []).filter(
-			(c) => !isAdultCategory(c.name)
-		);
-		const pinned = cats.filter((c) => c.pinned);
-		const picked = (pinned.length ? pinned : cats).slice(0, 3);
-		if (!picked.length) return [];
-
+		const cats = rowCategories(userId, conn.id, 'live', (await getLiveCategories(conn)) ?? []);
 		const lists = await Promise.all(
-			picked.map((c) =>
-				getLiveStreams(conn, c.id, CATALOG_TIMEOUT)
+			cats.map((c) =>
+				getLiveStreams(conn, c.id, CATEGORY_TIMEOUT)
 					.then((list) =>
 						(list ?? [])
-							.filter((s) => s.name && s.stream_icon)
-							.map((s) => ({ id: s.stream_id, name: s.name, image: s.stream_icon }))
+							.filter((s) => s.stream_icon && isPlayableTitle(s.name))
+							.slice(0, PER_CATEGORY)
+							.map((s) => ({ id: s.stream_id, name: s.name, image: s.stream_icon, rating: 0 }))
 					)
 					.catch(() => [])
 			)
 		);
-		return roundRobin(lists, ROW_SIZE);
+		return uniqueByTitle(roundRobin(lists, ROW_SIZE * 2)).slice(0, ROW_SIZE);
 	} catch {
 		return [];
 	}
@@ -208,8 +287,8 @@ export const load: PageServerLoad = ({ locals }) => {
 		hasConnection: conn != null,
 		connId: conn?.id ?? 0,
 		// Streamed: history and favorites render immediately, catalog rows fill in
-		popularShows: conn ? popularShows(conn) : [],
-		popularMovies: conn ? popularMovies(conn) : [],
+		popularShows: conn ? popularShows(user.id, conn) : [],
+		popularMovies: conn ? popularMovies(user.id, conn) : [],
 		liveChannels: conn ? liveChannels(user.id, conn) : []
 	};
 };

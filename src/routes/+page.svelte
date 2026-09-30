@@ -11,8 +11,8 @@
 	async function removeRecent(entry: RecentEntry) {
 		const payload =
 			entry.kind === 'series'
-				? { seriesId: entry.seriesId, connectionId: entry.connectionId }
-				: { id: entry.id };
+				? { seriesId: entry.seriesId, connectionId: entry.connectionId, ids: entry.absorbed }
+				: { id: entry.id, ids: entry.absorbed };
 		await fetch('/api/progress', {
 			method: 'DELETE',
 			headers: { 'Content-Type': 'application/json' },
