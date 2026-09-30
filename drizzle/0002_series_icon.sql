@@ -1,0 +1,1 @@
+ALTER TABLE `watch_progress` ADD `series_icon` text;

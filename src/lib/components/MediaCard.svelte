@@ -10,6 +10,7 @@
 		progress = 0,
 		landscape = false,
 		contain = false,
+		placeholder = 'video',
 		onRemove = undefined,
 		removeLabel = 'Remove'
 	}: {
@@ -22,6 +23,8 @@
 		landscape?: boolean;
 		/** Fit logos/stills inside the frame instead of cropping them */
 		contain?: boolean;
+		/** Which glyph stands in when there is no artwork to show */
+		placeholder?: 'video' | 'tv';
 		onRemove?: (() => void) | undefined;
 		removeLabel?: string;
 	} = $props();
@@ -50,6 +53,14 @@
 					onerror={() => (errors += 1)}
 					class="h-full w-full transition-transform duration-300 group-hover:scale-105 {fit ? 'object-contain p-4' : 'object-cover'}"
 				/>
+			{:else if placeholder === 'tv'}
+				<!-- Channel logos go missing often; a named tile beats a blank frame -->
+				<div class="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-surface-800 to-surface-900 px-3 text-zinc-500">
+					<svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="1.25" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M6 20.25h12m-7.5-3v3m3-3v3m-10.125-3h17.25c.621 0 1.125-.504 1.125-1.125V4.875c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125Z" />
+					</svg>
+					<span class="line-clamp-2 text-center text-[11px] leading-tight text-zinc-400">{title}</span>
+				</div>
 			{:else}
 				<div class="flex h-full w-full items-center justify-center text-zinc-600">
 					<svg class="h-10 w-10" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">

@@ -110,6 +110,20 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			const info = await getSeriesInfo(conn, seriesId);
 			seriesName = info.info?.name || name.split(' — ')[0];
 			seriesPoster = info.info?.cover || null;
+			// Remember the show's own artwork: history cards shouldn't be the
+			// still from whichever episode you happened to open.
+			if (seriesPoster) {
+				db.update(watchProgress)
+					.set({ seriesIcon: seriesPoster })
+					.where(
+						and(
+							eq(watchProgress.userId, user.id),
+							eq(watchProgress.connectionId, conn.id),
+							eq(watchProgress.seriesId, Number(seriesId))
+						)
+					)
+					.run();
+			}
 			const ordered = groupEpisodes(info).flatMap((s) => s.episodes);
 			const idx = ordered.findIndex((e) => e.id === numericId);
 			if (idx >= 0 && idx + 1 < ordered.length) nextEpisode = ordered[idx + 1];

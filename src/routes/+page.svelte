@@ -65,6 +65,26 @@
 
 <svelte:head><title>Home — StreamX</title></svelte:head>
 
+{#snippet recentsRow(art: Record<number, string>)}
+	<MediaRow title="Recently watched">
+		{#each data.recents as entry (entry.kind + entry.id)}
+			<div class="w-32 shrink-0 snap-start sm:w-36 md:w-40">
+				<MediaCard
+					href={recentUrl(entry)}
+					image={(entry.seriesId != null ? art[entry.seriesId] : null) ?? entry.icon}
+					title={entry.title}
+					subtitle={entry.subtitle}
+					progress={entry.progress}
+					contain={entry.kind === 'live'}
+					placeholder={entry.kind === 'live' ? 'tv' : 'video'}
+					onRemove={() => removeRecent(entry)}
+					removeLabel="Remove from recently watched"
+				/>
+			</div>
+		{/each}
+	</MediaRow>
+{/snippet}
+
 {#snippet loadingRow(title: string, href: string, wide: boolean)}
 	<MediaRow {title} {href}>
 		{#each Array.from({ length: 6 }) as _, i (i)}
@@ -93,22 +113,11 @@
 		</div>
 	{:else}
 		{#if data.recents.length}
-			<MediaRow title="Recently watched">
-				{#each data.recents as entry (entry.kind + entry.id)}
-					<div class="w-32 shrink-0 snap-start sm:w-36 md:w-40">
-						<MediaCard
-							href={recentUrl(entry)}
-							image={entry.icon}
-							title={entry.title}
-							subtitle={entry.subtitle}
-							progress={entry.progress}
-							contain={entry.kind === 'live'}
-							onRemove={() => removeRecent(entry)}
-							removeLabel="Remove from recently watched"
-						/>
-					</div>
-				{/each}
-			</MediaRow>
+			{#await data.seriesArt}
+				{@render recentsRow({})}
+			{:then art}
+				{@render recentsRow(art)}
+			{/await}
 		{/if}
 
 		{#await data.popularShows}
@@ -161,6 +170,7 @@
 								image={channel.image}
 								title={channel.name}
 								landscape
+								placeholder="tv"
 							/>
 						</div>
 					{/each}
@@ -181,6 +191,7 @@
 							image={fav.icon}
 							title={fav.name}
 							landscape={fav.streamType === 'live'}
+							placeholder={fav.streamType === 'live' ? 'tv' : 'video'}
 						/>
 					</div>
 				{/each}

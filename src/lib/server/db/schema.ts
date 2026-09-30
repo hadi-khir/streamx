@@ -69,6 +69,8 @@ export const watchProgress = sqliteTable(
 		seriesId: integer('series_id'),
 		name: text('name').notNull(),
 		icon: text('icon'),
+		/** Series poster, so a show's card isn't the still from one episode */
+		seriesIcon: text('series_icon'),
 		ext: text('ext'),
 		position: real('position').notNull().default(0),
 		duration: real('duration').notNull().default(0),
