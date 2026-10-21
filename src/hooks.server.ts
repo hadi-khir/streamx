@@ -3,7 +3,21 @@ import * as auth from '$lib/server/auth';
 
 const PUBLIC_PATHS = new Set(['/login', '/register']);
 
+// A stray rejection (a scanner's malformed URL, a provider socket dying
+// mid-stream) must cost one request, not take the server down with it.
+process.on('unhandledRejection', (reason) => {
+	console.error('Unhandled rejection:', reason);
+});
+
 export const handle: Handle = async ({ event, resolve }) => {
+	// SvelteKit can't decode a path like "/%c0", and a redirect thrown for one
+	// escapes as an unhandled rejection — answer it here instead.
+	try {
+		decodeURI(event.url.pathname);
+	} catch {
+		return new Response('Bad Request', { status: 400 });
+	}
+
 	const token = event.cookies.get(auth.SESSION_COOKIE);
 
 	if (token) {

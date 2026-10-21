@@ -3,8 +3,9 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { favorites, watchProgress } from '$lib/server/db/schema';
 import { requireConnection } from '$lib/server/connections';
-import { getSeriesInfo, getShortEpg, type EpgListing } from '$lib/server/xtream';
-import { groupEpisodes, type SeriesEpisode } from '$lib/server/series';
+import { getSeriesInfo, getShortEpg, getVodInfo, type EpgListing } from '$lib/server/xtream';
+import { audioCodecOf, groupEpisodes, type SeriesEpisode } from '$lib/server/series';
+import { knownToNeedFix } from '$lib/server/transcode';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url, locals }) => {
@@ -105,6 +106,24 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	let nextEpisode: SeriesEpisode | null = null;
 	let seriesName = '';
 	let seriesPoster: string | null = null;
+	// What the provider's own probe says about the file: the player needs the
+	// audio codec to know up front whether this browser can play the sound,
+	// and the length to seek a re-encoded stream, which can't report one.
+	let audioCodec: string | null = null;
+	let durationSecs: number | null = null;
+	if (type === 'movie') {
+		try {
+			const info = (await Promise.race([
+				getVodInfo(conn, streamId),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+			])) as Record<string, any>;
+			audioCodec = audioCodecOf(info?.info);
+			const secs = Number(info?.info?.duration_secs);
+			if (secs > 0) durationSecs = secs;
+		} catch {
+			// The player still finds out by listening
+		}
+	}
 	if (type === 'series' && seriesId) {
 		try {
 			const info = await getSeriesInfo(conn, seriesId);
@@ -126,6 +145,10 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			}
 			const ordered = groupEpisodes(info).flatMap((s) => s.episodes);
 			const idx = ordered.findIndex((e) => e.id === numericId);
+			if (idx >= 0) {
+				audioCodec = ordered[idx].audioCodec;
+				durationSecs = ordered[idx].durationSecs;
+			}
 			if (idx >= 0 && idx + 1 < ordered.length) nextEpisode = ordered[idx + 1];
 		} catch {
 			// Autoplay is a nicety — never block playback on the provider
@@ -142,8 +165,18 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		}
 	}
 
+	// Same title with the audio re-encoded, for when the original is silent here
+	const transcodeExt = type === 'live' ? 'ts' : ext && /^[a-zA-Z0-9]{1,10}$/.test(ext) && ext !== 'm3u8' ? ext : 'mp4';
+	const transcode = {
+		url: `/api/transcode/${conn.id}/${type}/${streamId}?ext=${transcodeExt}${seriesId ? `&series=${seriesId}` : ''}`,
+		known: knownToNeedFix(conn.id, type, numericId, seriesId ? Number(seriesId) : null)
+	};
+
 	return {
 		type: type as 'live' | 'movie' | 'series',
+		audioCodec,
+		durationSecs,
+		transcode,
 		streamId: numericId,
 		connectionId: conn.id,
 		seriesId: seriesId ? Number(seriesId) : null,

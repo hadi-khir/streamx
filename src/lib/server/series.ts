@@ -7,6 +7,14 @@ export interface SeriesEpisode {
 	image: string | null;
 	plot: string | null;
 	durationSecs: number | null;
+	/** The provider's own probe of the file, when it ran one */
+	audioCodec: string | null;
+}
+
+/** Xtream panels pass along ffprobe's view of a file as `info.audio`. */
+export function audioCodecOf(info: any): string | null {
+	const codec = info?.audio?.codec_name;
+	return typeof codec === 'string' && codec ? codec.toLowerCase() : null;
 }
 
 /**
@@ -35,7 +43,8 @@ export function groupEpisodes(data: Record<string, any>): { season: string; epis
 				ext: e.container_extension || 'mp4',
 				image: e.info?.movie_image || seasonCovers.get(String(e.season ?? season)) || null,
 				plot: e.info?.plot || null,
-				durationSecs: e.info?.duration_secs ? Number(e.info.duration_secs) : null
+				durationSecs: e.info?.duration_secs ? Number(e.info.duration_secs) : null,
+				audioCodec: audioCodecOf(e.info)
 			})
 		);
 		if (eps.length) out.push({ season, episodes: eps });
