@@ -28,6 +28,19 @@ import {
 	uniqueByTitle
 } from '$lib/server/popular';
 import type { Category } from '$lib/server/xtream';
+import { findItem, getCatalog, type Catalog } from '$lib/server/catalog';
+import {
+	buildTaste,
+	genreRow,
+	newArrivals,
+	similarTo,
+	topPicks,
+	trendingNow,
+	type Pick,
+	type Taste
+} from '$lib/server/recommend';
+import { lookup } from '$lib/server/tmdb';
+import { displayName } from '$lib/titles';
 import type { PageServerLoad } from './$types';
 
 const ROW_SIZE = 20;
@@ -378,6 +391,138 @@ async function liveChannels(userId: string, conn: Connection) {
 	}
 }
 
+// A cold start builds the catalog in the background; the rows that need it
+// wait this long for it and then make do with what has arrived.
+const CATALOG_WAIT = 20_000;
+
+export interface Row {
+	title: string;
+	items: Pick[];
+}
+
+export interface Hero extends Pick {
+	backdrop: string | null;
+	overview: string | null;
+	year: string | null;
+	genres: string[];
+	/** Why it's here: "Top pick for you", "#1 trending this week"… */
+	reason: string;
+}
+
+interface Personal {
+	catalog: Catalog;
+	taste: Taste;
+}
+
+async function personal(userId: string, conn: Connection): Promise<Personal | null> {
+	try {
+		const catalog = await getCatalog(conn, CATALOG_WAIT);
+		return { catalog, taste: buildTaste(userId, conn.serverUrl, catalog) };
+	} catch (e) {
+		console.error('Recommendations unavailable:', e);
+		return null;
+	}
+}
+
+const GENRE_TITLES: Record<string, string> = {
+	'sci-fi': 'Sci-Fi',
+	family: 'Family',
+	documentary: 'Documentaries',
+	reality: 'Reality TV',
+	holiday: 'Holiday'
+};
+
+function genreTitle(genre: string): string {
+	return GENRE_TITLES[genre] ?? genre.charAt(0).toUpperCase() + genre.slice(1);
+}
+
+/**
+ * The personal rows: top picks, a "because you watched" per recent title,
+ * and your strongest genre. Each title appears in one of them only.
+ */
+async function personalRows(ctx: Promise<Personal | null>): Promise<Row[]> {
+	const p = await ctx;
+	if (!p || !p.taste.anchors.length) return [];
+	const { catalog, taste } = p;
+	const rows: Row[] = [];
+	const shown = new Set<string>();
+	const fresh = (items: Pick[], min: number) => {
+		const out = items.filter((i) => !shown.has(`${i.kind}:${i.id}`));
+		if (out.length < min) return null;
+		for (const i of out) shown.add(`${i.kind}:${i.id}`);
+		return out;
+	};
+
+	const picks = fresh(topPicks(catalog, taste, 24), 6);
+	if (picks) rows.push({ title: 'Top Picks for You', items: picks });
+
+	// The latest few distinct shows and films you've watched seed a row each
+	const seeds = taste.anchors.slice(0, 3);
+	const similar = await Promise.all(seeds.map((a) => similarTo(catalog, a.item, taste, 24).catch(() => [])));
+	seeds.forEach((seed, i) => {
+		const items = fresh(similar[i], 6);
+		if (items) rows.push({ title: `Because you watched ${displayName(seed.item.name)}`, items });
+	});
+
+	const genre = genreRow(catalog, taste, shown, 24);
+	if (genre) {
+		const items = fresh(genre.picks, 6);
+		if (items) rows.push({ title: `${genreTitle(genre.genre)} for You`, items });
+	}
+	return rows;
+}
+
+async function trendingRow(ctx: Promise<Personal | null>): Promise<Pick[]> {
+	const p = await ctx;
+	return p ? trendingNow(p.catalog, p.taste, 20) : [];
+}
+
+async function newRow(ctx: Promise<Personal | null>): Promise<Pick[]> {
+	const p = await ctx;
+	return p ? newArrivals(p.catalog, p.taste, 20) : [];
+}
+
+/**
+ * The billboard: your top pick, else this week's biggest title the provider
+ * has, else the head of the popular shows row — dressed in TMDB artwork.
+ */
+async function hero(
+	ctx: Promise<Personal | null>,
+	trendingItems: Promise<Pick[]>,
+	shows: Promise<RowItem[]>
+): Promise<Hero | null> {
+	const p = await ctx;
+	const candidates: { pick: Pick; reason: string }[] = [];
+	if (p?.taste.anchors.length) {
+		for (const pick of topPicks(p.catalog, p.taste, 5)) candidates.push({ pick, reason: 'Top pick for you' });
+	}
+	(await trendingItems).slice(0, 5).forEach((pick, i) => candidates.push({ pick, reason: `#${i + 1} trending this week` }));
+	for (const s of (await shows).slice(0, 3)) {
+		candidates.push({ pick: { kind: 'series', id: s.id, name: s.name, image: s.image, rating: s.rating }, reason: 'Popular on StreamX' });
+	}
+
+	// The first candidate with real artwork wins; a poster stretched to a
+	// billboard looks broken
+	for (const { pick, reason } of candidates.slice(0, 6)) {
+		const info = await lookup(pick.kind === 'movie' ? 'movie' : 'tv', pick.name).catch(() => null);
+		if (!info?.backdrop) continue;
+		const item = p ? findItem(p.catalog, pick.kind, pick.id) : undefined;
+		return {
+			...pick,
+			name: displayName(pick.name),
+			backdrop: info.backdrop,
+			overview: info.overview,
+			year: info.year ?? (item?.year ? String(item.year) : null),
+			genres: info.genres.length ? info.genres.slice(0, 3) : (item?.genres ?? []).slice(0, 3).map(genreTitle),
+			reason
+		};
+	}
+	const first = candidates[0];
+	return first
+		? { ...first.pick, name: displayName(first.pick.name), backdrop: null, overview: null, year: null, genres: [], reason: first.reason }
+		: null;
+}
+
 export const load: PageServerLoad = ({ locals }) => {
 	const user = locals.user!;
 
@@ -394,16 +539,41 @@ export const load: PageServerLoad = ({ locals }) => {
 
 	const recents = recentlyWatched(user.id);
 
+	if (!conn) {
+		return {
+			recents,
+			favorites: favs,
+			hasConnection: false,
+			connId: 0,
+			seriesArt: Promise.resolve({} as Record<number, string>),
+			hero: Promise.resolve(null),
+			personalRows: Promise.resolve([] as Row[]),
+			trending: Promise.resolve([] as Pick[]),
+			newArrivals: Promise.resolve([] as Pick[]),
+			popularShows: Promise.resolve([] as RowItem[]),
+			popularMovies: Promise.resolve([] as RowItem[]),
+			liveChannels: Promise.resolve([] as RowItem[])
+		};
+	}
+
+	const ctx = personal(user.id, conn);
+	const shows = popularShows(user.id, conn);
+	const trend = trendingRow(ctx);
+
 	return {
 		recents,
 		favorites: favs,
-		hasConnection: conn != null,
-		connId: conn?.id ?? 0,
+		hasConnection: true,
+		connId: conn.id,
 		// Streamed: history and favorites render immediately, artwork and
 		// catalog rows fill in
 		seriesArt: seriesArt(user.id, recents),
-		popularShows: conn ? popularShows(user.id, conn) : [],
-		popularMovies: conn ? popularMovies(user.id, conn) : [],
-		liveChannels: conn ? liveChannels(user.id, conn) : []
+		hero: hero(ctx, trend, shows).catch(() => null),
+		personalRows: personalRows(ctx).catch(() => [] as Row[]),
+		trending: trend.catch(() => [] as Pick[]),
+		newArrivals: newRow(ctx).catch(() => [] as Pick[]),
+		popularShows: shows,
+		popularMovies: popularMovies(user.id, conn),
+		liveChannels: liveChannels(user.id, conn)
 	};
 };

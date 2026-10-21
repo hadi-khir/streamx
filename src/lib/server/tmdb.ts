@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 
 export interface TmdbInfo {
+	id: number | null;
 	poster: string | null;
 	backdrop: string | null;
 	overview: string | null;
@@ -51,6 +52,7 @@ async function tmdbFetch(path: string, params: Record<string, string>): Promise<
 
 function toInfo(d: any, type: 'movie' | 'tv'): TmdbInfo {
 	return {
+		id: typeof d.id === 'number' ? d.id : null,
 		poster: d.poster_path ? `${IMG}/w500${d.poster_path}` : null,
 		backdrop: d.backdrop_path ? `${IMG}/w1280${d.backdrop_path}` : null,
 		overview: d.overview || null,
@@ -92,4 +94,46 @@ export async function lookup(
 
 	cache.set(cacheKey, { data, time: Date.now() });
 	return data;
+}
+
+export function hasTmdb(): boolean {
+	return apiKey() != null;
+}
+
+export interface TmdbTitle {
+	type: 'movie' | 'tv';
+	title: string;
+	year: string | null;
+}
+
+const listCache = new Map<string, { data: TmdbTitle[]; time: number }>();
+
+async function titleList(path: string, fallbackType: 'movie' | 'tv' | null): Promise<TmdbTitle[]> {
+	const hit = listCache.get(path);
+	if (hit && Date.now() - hit.time < CACHE_TTL) return hit.data;
+	const pages = await Promise.all([1, 2].map((page) => tmdbFetch(path, { page: String(page) })));
+	const data: TmdbTitle[] = [];
+	for (const d of pages) {
+		for (const r of d?.results ?? []) {
+			const type = r.media_type === 'movie' || r.media_type === 'tv' ? r.media_type : fallbackType;
+			if (!type) continue;
+			const title = type === 'movie' ? r.title : r.name;
+			if (!title) continue;
+			const date: string | undefined = type === 'movie' ? r.release_date : r.first_air_date;
+			data.push({ type, title, year: date?.slice(0, 4) || null });
+		}
+	}
+	// Don't pin an outage for a day
+	if (data.length) listCache.set(path, { data, time: Date.now() });
+	return data;
+}
+
+/** What TMDB's audience watched alongside this title, best first. */
+export function recommendations(type: 'movie' | 'tv', tmdbId: number): Promise<TmdbTitle[]> {
+	return titleList(`/${type}/${tmdbId}/recommendations`, type);
+}
+
+/** This week's most-watched films and shows, worldwide. */
+export function trending(): Promise<TmdbTitle[]> {
+	return titleList('/trending/all/week', null);
 }

@@ -35,7 +35,7 @@
 
 	<div class="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
 		<div class="mb-4 flex items-center justify-between gap-3">
-			<h1 class="text-xl font-bold">Live TV</h1>
+			<h1 class="text-2xl font-bold sm:text-3xl">Live TV</h1>
 			<CategorySelect
 				basePath="/live"
 				allLabel="All channels"

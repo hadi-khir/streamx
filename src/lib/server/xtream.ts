@@ -213,40 +213,28 @@ export async function getShortEpg(
 	});
 }
 
-/** Full-text search across live/vod/series. Index is cached for 5 minutes per connection. */
-export async function searchAll(conn: XtreamConn, query: string): Promise<SearchItem[]> {
+/**
+ * Live channels matching `query`. The channel list is the one full listing
+ * providers reliably answer; movies and shows are searched in the catalog
+ * index instead (see $lib/server/catalog). Cached for 5 minutes.
+ */
+export async function searchLive(conn: XtreamConn, query: string): Promise<SearchItem[]> {
 	const key = connKey(conn);
 	let index = searchIndexes.get(key);
 	if (!index || Date.now() - index.time >= CACHE_TTL) {
-		const results = await Promise.allSettled([
-			getLiveStreams(conn, null, INDEX_FETCH_TIMEOUT),
-			getVodStreams(conn, null, INDEX_FETCH_TIMEOUT),
-			getSeries(conn, null, INDEX_FETCH_TIMEOUT)
-		]);
-		const live = results[0].status === 'fulfilled' ? (results[0].value ?? []) : [];
-		const vod = results[1].status === 'fulfilled' ? (results[1].value ?? []) : [];
-		const series = results[2].status === 'fulfilled' ? (results[2].value ?? []) : [];
-
+		let live: LiveStream[] = [];
+		let ok = true;
+		try {
+			live = (await getLiveStreams(conn, null, INDEX_FETCH_TIMEOUT)) ?? [];
+		} catch {
+			ok = false;
+		}
 		const items: SearchItem[] = [];
 		for (const s of live)
 			if (s.name) items.push({ type: 'live', id: s.stream_id, name: s.name, icon: s.stream_icon });
-		for (const s of vod)
-			if (s.name)
-				items.push({
-					type: 'movie',
-					id: s.stream_id,
-					name: s.name,
-					icon: s.stream_icon,
-					ext: s.container_extension
-				});
-		for (const s of series)
-			if (s.name) items.push({ type: 'series', id: s.series_id, name: s.name, icon: s.cover });
-
 		index = { items, time: Date.now() };
-		// If some sources failed, expire the index quickly so it retries
-		if (!results.every((r) => r.status === 'fulfilled')) {
-			index.time = Date.now() - CACHE_TTL + 30_000;
-		}
+		// If the listing failed, expire the index quickly so it retries
+		if (!ok) index.time = Date.now() - CACHE_TTL + 30_000;
 		searchIndexes.set(key, index);
 	}
 

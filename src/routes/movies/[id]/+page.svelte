@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { downloadUrl } from '$lib/download';
+	import Billboard from '$lib/components/Billboard.svelte';
+	import MediaCard from '$lib/components/MediaCard.svelte';
+	import { displayName } from '$lib/titles';
 
 	let { data } = $props();
 
@@ -51,6 +54,13 @@
 		if (res?.ok) favorited = (await res.json()).favorited;
 	}
 
+	const resuming = $derived(resumePct > 0 && resumePct < 95);
+	const meta = $derived(
+		[data.year, data.durationSecs ? fmtDuration(data.durationSecs) : null, ...data.genres.slice(0, 3)].filter(
+			(x): x is string => !!x
+		)
+	);
+
 	function fmtDuration(secs: number): string {
 		const h = Math.floor(secs / 3600);
 		const m = Math.round((secs % 3600) / 60);
@@ -58,107 +68,77 @@
 	}
 </script>
 
-<svelte:head><title>{data.name} — StreamX</title></svelte:head>
+<svelte:head><title>{displayName(data.name)} — StreamX</title></svelte:head>
 
-<div class="relative">
-	{#if data.backdrop}
-		<div class="absolute inset-x-0 top-0 h-72 overflow-hidden">
-			<img src={data.backdrop} alt="" class="h-full w-full object-cover opacity-25 blur-sm" />
-			<div class="absolute inset-0 bg-gradient-to-b from-transparent to-surface-950"></div>
+<Billboard
+	short
+	title={displayName(data.name)}
+	backdrop={data.backdrop}
+	poster={data.poster}
+	overview={data.overview}
+	rating={data.rating}
+	{meta}
+>
+	<a href={watchUrl} class="btn-play">
+		<svg class="h-6 w-6 sm:h-7 sm:w-7" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+		{resuming ? 'Resume' : 'Play'}
+	</a>
+	<button
+		onclick={toggleFavorite}
+		class="btn-round"
+		title={favorited ? 'Remove from My List' : 'Add to My List'}
+		aria-label={favorited ? 'Remove from My List' : 'Add to My List'}
+	>
+		{#if favorited}
+			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+		{:else}
+			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+		{/if}
+	</button>
+	<a href={saveUrl} download class="btn-round" title="Download for offline viewing" aria-label="Download for offline viewing">
+		<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+		</svg>
+	</a>
+</Billboard>
+
+<div class="gutter relative z-10 -mt-[6vh] pb-20">
+	{#if resuming}
+		<div class="mb-6 flex max-w-md items-center gap-3">
+			<div class="h-1 flex-1 bg-zinc-700">
+				<div class="h-full bg-accent" style="width: {resumePct}%"></div>
+			</div>
+			<span class="text-xs text-zinc-400">{Math.round(100 - resumePct)}% left</span>
 		</div>
 	{/if}
 
-	<div class="relative mx-auto max-w-5xl p-6 md:p-10">
-		<button onclick={() => history.back()} class="mb-6 flex items-center gap-1 text-sm text-zinc-400 transition-colors hover:text-white">
-			<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
-			Back
-		</button>
-
-		<div class="flex flex-col gap-8 md:flex-row">
-			<div class="w-48 shrink-0 md:w-64">
-				<div class="aspect-[2/3] overflow-hidden rounded-2xl border border-surface-800 bg-surface-900 shadow-2xl">
-					{#if data.poster}
-						<img src={data.poster} alt="" class="h-full w-full object-cover" />
-					{:else}
-						<div class="flex h-full items-center justify-center text-zinc-700">
-							<svg class="h-16 w-16" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25M3.375 4.5h17.25M5.625 4.5v15m12.75-15v15" /></svg>
-						</div>
-					{/if}
-				</div>
-			</div>
-
-			<div class="min-w-0 flex-1">
-				<h1 class="text-3xl font-bold">{data.name}</h1>
-
-				<div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-zinc-400">
-					{#if data.year}<span>{data.year}</span>{/if}
-					{#if data.durationSecs}<span>· {fmtDuration(data.durationSecs)}</span>{/if}
-					{#if data.rating}
-						<span class="flex items-center gap-1 text-amber-400">
-							<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>
-							{data.rating.toFixed(1)}
-						</span>
-					{/if}
-				</div>
-
-				{#if data.genres.length}
-					<div class="mt-3 flex flex-wrap gap-1.5">
-						{#each data.genres as genre (genre)}
-							<span class="rounded-full border border-surface-700 px-2.5 py-0.5 text-xs text-zinc-400">{genre}</span>
-						{/each}
-					</div>
-				{/if}
-
-				{#if data.overview}
-					<p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-300">{data.overview}</p>
-				{/if}
-
-				{#if data.cast}
-					<p class="mt-4 text-xs text-zinc-500"><span class="font-medium text-zinc-400">Cast:</span> {data.cast}</p>
-				{/if}
-				{#if data.director}
-					<p class="mt-1 text-xs text-zinc-500"><span class="font-medium text-zinc-400">Director:</span> {data.director}</p>
-				{/if}
-
-				<div class="mt-7 flex items-center gap-3">
-					<a
-						href={watchUrl}
-						class="flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
-					>
-						<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-						{resumePct > 0 && resumePct < 95 ? 'Resume' : 'Play'}
-					</a>
-					<a
-						href={saveUrl}
-						download
-						class="flex items-center gap-2 rounded-xl border border-surface-700 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:text-white"
-						title="Save this movie to your device for offline viewing"
-					>
-						<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-						</svg>
-						Download
-					</a>
-					<button
-						onclick={toggleFavorite}
-						class="rounded-xl border border-surface-700 p-2.5 transition-colors {favorited ? 'border-red-400/40 text-red-400' : 'text-zinc-400 hover:text-white'}"
-						title={favorited ? 'Remove from favorites' : 'Add to favorites'}
-					>
-						<svg class="h-5 w-5" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-						</svg>
-					</button>
-				</div>
-
-				{#if resumePct > 0 && resumePct < 95}
-					<div class="mt-4 max-w-xs">
-						<div class="h-1 rounded-full bg-surface-800">
-							<div class="h-full rounded-full bg-accent" style="width: {resumePct}%"></div>
-						</div>
-						<p class="mt-1 text-xs text-zinc-500">{Math.round(resumePct)}% watched</p>
-					</div>
-				{/if}
-			</div>
+	{#if data.cast || data.director || data.genres.length}
+		<div class="max-w-3xl space-y-1.5 text-sm">
+			{#if data.cast}
+				<p class="line-clamp-2 text-zinc-500">Cast: <span class="text-zinc-300">{data.cast}</span></p>
+			{/if}
+			{#if data.director}
+				<p class="text-zinc-500">Director: <span class="text-zinc-300">{data.director}</span></p>
+			{/if}
+			{#if data.genres.length}
+				<p class="text-zinc-500">Genres: <span class="text-zinc-300">{data.genres.join(', ')}</span></p>
+			{/if}
 		</div>
-	</div>
+	{/if}
+
+	{#await data.similar then similar}
+		{#if similar.length}
+			<h2 class="mt-10 mb-3 text-xl font-bold sm:text-2xl">More Like This</h2>
+			<div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+				{#each similar as item (item.kind + item.id)}
+					<MediaCard
+						href={item.kind === 'movie' ? `/movies/${item.id}?conn=${data.connId}` : `/series/${item.id}?conn=${data.connId}`}
+						image={item.image}
+						title={item.name}
+						badge={item.rating ? `★ ${item.rating.toFixed(1)}` : ''}
+					/>
+				{/each}
+			</div>
+		{/if}
+	{/await}
 </div>

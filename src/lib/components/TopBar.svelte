@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 
 	let {
 		user,
@@ -9,105 +10,184 @@
 		connections: { id: number; name: string }[];
 	} = $props();
 
-	const toggles = [
-		{ href: '/series', label: 'TV', short: 'TV' },
-		{ href: '/movies', label: 'Movies', short: 'Movies' },
-		{ href: '/live', label: 'Live TV', short: 'Live' }
+	const links = [
+		{ href: '/', label: 'Home' },
+		{ href: '/series', label: 'TV Shows' },
+		{ href: '/movies', label: 'Movies' },
+		{ href: '/live', label: 'Live TV' },
+		{ href: '/favorites', label: 'My List' }
 	];
 
-	const icons = [
-		{
-			href: '/search',
-			label: 'Search',
-			path: 'm21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z'
-		},
-		{
-			href: '/favorites',
-			label: 'Favorites',
-			path: 'M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z'
-		},
-		{
-			href: '/settings',
-			label: 'Settings',
-			path: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'
+	const active = $derived((href: string) =>
+		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href)
+	);
+	const current = $derived(links.find((l) => active(l.href))?.label ?? 'Browse');
+
+	// Transparent over a billboard, solid once the page scrolls under it.
+	// Pages scroll inside their own containers, so listen to every scroll.
+	let scrolled = $state(false);
+	$effect(() => {
+		const onScroll = (e: Event) => {
+			const target = e.target instanceof HTMLElement ? e.target : document.scrollingElement;
+			scrolled = (target?.scrollTop ?? 0) > 8;
+		};
+		document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+		return () => document.removeEventListener('scroll', onScroll, { capture: true });
+	});
+	$effect(() => {
+		page.url.pathname;
+		scrolled = false;
+	});
+
+	let searchOpen = $state(false);
+	let query = $state('');
+	let searchInput: HTMLInputElement | undefined = $state();
+	let menuOpen = $state(false);
+	let browseOpen = $state(false);
+
+	$effect(() => {
+		if (page.url.pathname === '/search') {
+			searchOpen = true;
+			query = page.url.searchParams.get('q') ?? '';
 		}
-	];
+	});
 
-	const active = $derived((href: string) => page.url.pathname.startsWith(href));
+	function openSearch() {
+		searchOpen = true;
+		queueMicrotask(() => searchInput?.focus());
+	}
+
+	let searchTimer: ReturnType<typeof setTimeout>;
+	function onSearchInput() {
+		// Search as you type, like Netflix, without a request per keystroke
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			if (query.trim().length >= 2) {
+				goto(`/search?q=${encodeURIComponent(query.trim())}`, { keepFocus: true, replaceState: page.url.pathname === '/search' });
+			}
+		}, 400);
+	}
+
+	function closeMenus(e: MouseEvent) {
+		const t = e.target as HTMLElement;
+		if (!t.closest('[data-menu]')) {
+			menuOpen = false;
+			browseOpen = false;
+		}
+		if (searchOpen && !query && page.url.pathname !== '/search' && !t.closest('[data-search]')) searchOpen = false;
+	}
 </script>
 
-<header class="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center px-3 pt-3">
-	<div
-		class="pointer-events-auto flex w-full min-w-0 max-w-5xl items-center gap-1 rounded-full border border-surface-800 bg-surface-900/85 p-1.5 shadow-lg shadow-black/40 backdrop-blur-md sm:gap-2"
-	>
-		<a
-			href="/"
-			class="shrink-0 rounded-full px-1.5 text-base font-bold tracking-tight sm:px-3"
-			title="Home"
-		>
-			<span class="hidden sm:inline">Stream<span class="text-accent">X</span></span>
-			<span class="text-accent sm:hidden">X</span>
-		</a>
+<svelte:window onclick={closeMenus} />
 
-		<nav class="flex min-w-0 flex-1 items-center justify-center gap-0.5 sm:gap-1">
-			{#each toggles as item (item.href)}
-				<a
-					href={item.href}
-					class="min-w-0 truncate rounded-full px-2 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:text-sm
-						{active(item.href)
-						? 'bg-accent text-white'
-						: 'text-zinc-400 hover:bg-surface-800 hover:text-zinc-100'}"
-				>
-					<span class="hidden sm:inline">{item.label}</span>
-					<span class="sm:hidden">{item.short}</span>
-				</a>
-			{/each}
-		</nav>
+<header
+	class="gutter fixed inset-x-0 top-0 z-40 flex h-16 items-center gap-4 transition-colors duration-500 lg:gap-10
+		{scrolled ? 'bg-surface-950 shadow-lg shadow-black/30' : 'bg-gradient-to-b from-black/80 to-transparent'}"
+>
+	<a href="/" class="shrink-0 text-2xl font-black tracking-tighter text-accent uppercase sm:text-[1.7rem]" title="Home">
+		Stream<span class="text-white/90">X</span>
+	</a>
 
-		<div class="flex shrink-0 items-center gap-0.5">
-			{#if connections.length > 1}
-				<form method="POST" action="/settings?/activate" class="hidden lg:block">
-					<select
-						name="connectionId"
-						class="max-w-32 rounded-full border border-surface-700 bg-surface-950 px-2 py-1 text-xs text-zinc-300 outline-none"
-						onchange={(e) => e.currentTarget.form?.submit()}
-						title="Active connection"
+	<!-- Desktop: the links inline -->
+	<nav class="hidden items-center gap-5 md:flex">
+		{#each links as link (link.href)}
+			<a
+				href={link.href}
+				class="text-sm transition-colors {active(link.href) ? 'font-semibold text-white' : 'text-zinc-300 hover:text-zinc-400'}"
+			>
+				{link.label}
+			</a>
+		{/each}
+	</nav>
+
+	<!-- Mobile: a "Browse" menu, as on Netflix -->
+	<div class="relative md:hidden" data-menu>
+		<button onclick={() => (browseOpen = !browseOpen)} class="flex items-center gap-1 text-sm font-semibold text-white">
+			{current}
+			<svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z" /></svg>
+		</button>
+		{#if browseOpen}
+			<div class="absolute top-8 left-0 w-44 rounded border border-white/15 bg-black/95 py-2 shadow-xl">
+				{#each links as link (link.href)}
+					<a
+						href={link.href}
+						onclick={() => (browseOpen = false)}
+						class="block px-4 py-2 text-sm {active(link.href) ? 'font-semibold text-white' : 'text-zinc-400'}"
 					>
+						{link.label}
+					</a>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
+	<div class="flex-1"></div>
+
+	<div class="flex items-center gap-3 sm:gap-5">
+		<form
+			action="/search"
+			data-search
+			class="flex items-center border transition-all duration-300 {searchOpen ? 'border-white/80 bg-black/80' : 'border-transparent'}"
+			onsubmit={(e) => {
+				if (!query.trim()) e.preventDefault();
+			}}
+		>
+			<button
+				type="button"
+				onclick={openSearch}
+				class="p-1.5 text-white"
+				title="Search"
+				aria-label="Search"
+			>
+				<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+				</svg>
+			</button>
+			<input
+				bind:this={searchInput}
+				bind:value={query}
+				oninput={onSearchInput}
+				name="q"
+				placeholder="Titles, channels"
+				autocomplete="off"
+				class="bg-transparent text-sm text-white outline-none placeholder:text-zinc-500 transition-all duration-300 {searchOpen ? 'w-32 pr-2 sm:w-56' : 'w-0'}"
+			/>
+		</form>
+
+		<div class="relative" data-menu>
+			<button
+				onclick={() => (menuOpen = !menuOpen)}
+				class="flex items-center gap-1.5"
+				aria-label="Account menu"
+			>
+				<span class="flex h-8 w-8 items-center justify-center rounded bg-gradient-to-br from-sky-500 to-indigo-700 text-sm font-bold text-white uppercase">
+					{user.username.slice(0, 1)}
+				</span>
+				<svg class="h-3 w-3 text-white transition-transform {menuOpen ? 'rotate-180' : ''}" fill="currentColor" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z" /></svg>
+			</button>
+			{#if menuOpen}
+				<div class="absolute top-11 right-0 w-56 rounded border border-white/15 bg-black/95 py-2 text-sm shadow-xl">
+					<p class="truncate px-4 pt-1 pb-2 text-xs text-zinc-500">Signed in as <span class="text-zinc-300">{user.username}</span></p>
+					{#if connections.length > 1}
+						<p class="border-t border-white/10 px-4 pt-2 pb-1 text-xs text-zinc-500">Provider</p>
 						{#each connections as conn (conn.id)}
-							<option value={conn.id} selected={conn.id === user.activeConnectionId}>
-								{conn.name}
-							</option>
+							<form method="POST" action="/settings?/activate">
+								<input type="hidden" name="connectionId" value={conn.id} />
+								<button class="flex w-full items-center gap-2 px-4 py-1.5 text-left text-zinc-300 hover:underline">
+									<span class="w-3">{conn.id === user.activeConnectionId ? '✓' : ''}</span>
+									<span class="truncate">{conn.name}</span>
+								</button>
+							</form>
 						{/each}
-					</select>
-				</form>
+					{/if}
+					<div class="mt-1 border-t border-white/10 pt-1">
+						<a href="/settings" onclick={() => (menuOpen = false)} class="block px-4 py-2 text-zinc-300 hover:underline">Settings</a>
+						<form method="POST" action="/logout">
+							<button class="w-full px-4 py-2 text-left text-zinc-300 hover:underline">Sign out of StreamX</button>
+						</form>
+					</div>
+				</div>
 			{/if}
-
-			{#each icons as item (item.href)}
-				<a
-					href={item.href}
-					title={item.label}
-					aria-label={item.label}
-					class="rounded-full p-1.5 transition-colors sm:p-2 {active(item.href)
-						? 'bg-accent/15 text-accent'
-						: 'text-zinc-400 hover:bg-surface-800 hover:text-zinc-100'}"
-				>
-					<svg class="h-4 w-4 sm:h-4.5 sm:w-4.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" d={item.path} />
-					</svg>
-				</a>
-			{/each}
-
-			<form method="POST" action="/logout">
-				<button
-					class="rounded-full p-1.5 text-zinc-500 transition-colors hover:bg-surface-800 hover:text-zinc-200 sm:p-2"
-					title="Sign out ({user.username})"
-					aria-label="Sign out"
-				>
-					<svg class="h-4 w-4 sm:h-4.5 sm:w-4.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-					</svg>
-				</button>
-			</form>
 		</div>
 	</div>
 </header>

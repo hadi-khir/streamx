@@ -3,6 +3,7 @@
 	import VideoPlayer from '$lib/components/VideoPlayer.svelte';
 	import { episodeWatchUrl } from '$lib/episodes';
 	import { downloadUrl } from '$lib/download';
+	import { displayName } from '$lib/titles';
 
 	let { data } = $props();
 
@@ -92,7 +93,13 @@
 	// Episodes are saved as "Show — Episode"; the player shows them on two lines
 	const [titleLine, ...restLines] = $derived(data.name.split(' — '));
 	const subtitleLine = $derived(
-		data.type === 'live' ? (nowPlaying?.title ?? 'Live TV') : restLines.join(' — ')
+		data.type === 'live'
+			? (nowPlaying?.title ?? 'Live TV')
+			: restLines
+					.join(' — ')
+					// Episode titles repeat the show: "Superstore (2015) - S01E07"
+					.replace(titleLine, '')
+					.replace(/^[\s\-–—:|]+/, '')
 	);
 
 	function back() {
@@ -161,7 +168,7 @@
 		transcode={data.transcode}
 		audioCodec={data.audioCodec}
 		durationHint={data.durationSecs}
-		title={titleLine}
+		title={displayName(titleLine)}
 		subtitle={subtitleLine}
 		onBack={back}
 		{actions}

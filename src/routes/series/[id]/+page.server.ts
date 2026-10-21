@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { favorites, watchProgress } from '$lib/server/db/schema';
@@ -6,6 +6,8 @@ import { requireConnection } from '$lib/server/connections';
 import { getSeriesInfo } from '$lib/server/xtream';
 import { lookup } from '$lib/server/tmdb';
 import { groupEpisodes, type SeriesEpisode } from '$lib/server/series';
+import { moreLikeThis } from '$lib/server/recommend';
+import { episodeWatchUrl } from '$lib/episodes';
 import type { PageServerLoad } from './$types';
 
 export type Episode = SeriesEpisode & { progressPct: number };
@@ -31,7 +33,8 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		.select({
 			streamId: watchProgress.streamId,
 			position: watchProgress.position,
-			duration: watchProgress.duration
+			duration: watchProgress.duration,
+			updatedAt: watchProgress.updatedAt
 		})
 		.from(watchProgress)
 		.where(
@@ -62,6 +65,31 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 				}))
 			: [];
 
+	// Netflix's one button: resume the episode you're in the middle of, else
+	// the one after the last you finished, else the very first
+	const ordered = seasons.flatMap((s) => s.episodes);
+	let upNext: { episode: Episode; label: string; resume: boolean } | null = null;
+	if (ordered.length) {
+		const last = [...progressRows].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+		const idx = last ? ordered.findIndex((e) => e.id === last.streamId) : -1;
+		const finished = last && last.duration > 0 && last.position >= last.duration * 0.95;
+		let episode = ordered[0];
+		let resume = false;
+		if (idx >= 0 && !finished && last.position > 60) {
+			episode = ordered[idx];
+			resume = true;
+		} else if (idx >= 0) {
+			episode = ordered[Math.min(idx + 1, ordered.length - 1)];
+		}
+		const where = `S${episode.season}:E${episode.num}`;
+		upNext = { episode, resume, label: idx < 0 ? 'Play' : `${resume ? 'Resume' : 'Play'} ${where}` };
+	}
+
+	const poster = tmdb?.poster || info.cover || null;
+	if (url.searchParams.get('play') && upNext) {
+		redirect(303, episodeWatchUrl({ seriesId, seriesName: name, connId: conn.id, poster }, upNext.episode));
+	}
+
 	const favorited =
 		db
 			.select({ id: favorites.id })
@@ -80,7 +108,15 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		connId: conn.id,
 		seriesId,
 		name,
-		poster: tmdb?.poster || info.cover || null,
+		poster,
+		upNext,
+		// Streamed: the page shouldn't wait on recommendations
+		similar: moreLikeThis(conn, 'series', seriesId, {
+			name,
+			categoryId: info.category_id,
+			genre: info.genre,
+			cast: info.cast
+		}).catch(() => []),
 		backdrop:
 			tmdb?.backdrop || (Array.isArray(info.backdrop_path) ? info.backdrop_path[0] : null),
 		overview: tmdb?.overview || info.plot || null,
