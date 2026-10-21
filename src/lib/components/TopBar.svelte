@@ -48,7 +48,8 @@
 	$effect(() => {
 		if (page.url.pathname === '/search') {
 			searchOpen = true;
-			query = page.url.searchParams.get('q') ?? '';
+			// While typing, the box is ahead of the URL; don't rewind it
+			if (document.activeElement !== searchInput) query = page.url.searchParams.get('q') ?? '';
 		}
 	});
 
@@ -62,6 +63,8 @@
 		// Search as you type, like Netflix, without a request per keystroke
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(() => {
+			// Clicked away to a result meanwhile: don't yank them back to search
+			if (document.activeElement !== searchInput) return;
 			if (query.trim().length >= 2) {
 				goto(`/search?q=${encodeURIComponent(query.trim())}`, { keepFocus: true, replaceState: page.url.pathname === '/search' });
 			}
@@ -129,6 +132,7 @@
 			data-search
 			class="flex items-center border transition-all duration-300 {searchOpen ? 'border-white/80 bg-black/80' : 'border-transparent'}"
 			onsubmit={(e) => {
+				clearTimeout(searchTimer);
 				if (!query.trim()) e.preventDefault();
 			}}
 		>

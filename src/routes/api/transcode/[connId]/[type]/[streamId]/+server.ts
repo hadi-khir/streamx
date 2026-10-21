@@ -39,7 +39,10 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 
 	const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
 	const audioTrack = Math.max(0, Math.floor(Number(url.searchParams.get('audio')) || 0));
-	rememberFix(conn.id, type, streamId, url.searchParams.get('series'));
+	// Only an undecodable track is worth remembering — not a container fallback
+	if (url.searchParams.get('fix') === 'audio') {
+		rememberFix(conn.id, type, streamId, url.searchParams.get('series'));
+	}
 
 	return new Response(transcodeAudio(conn.id, source, { start, live, audioTrack }), {
 		headers: {

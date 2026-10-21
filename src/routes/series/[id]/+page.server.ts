@@ -75,9 +75,10 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		const finished = last && last.duration > 0 && last.position >= last.duration * 0.95;
 		let episode = ordered[0];
 		let resume = false;
-		if (idx >= 0 && !finished && last.position > 60) {
+		if (idx >= 0 && !finished) {
+			// Opened but barely started still means "this one", not the next
 			episode = ordered[idx];
-			resume = true;
+			resume = last.position > 60;
 		} else if (idx >= 0) {
 			episode = ordered[Math.min(idx + 1, ordered.length - 1)];
 		}

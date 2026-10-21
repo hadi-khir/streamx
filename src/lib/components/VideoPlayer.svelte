@@ -110,9 +110,15 @@
 	let countdownTimer: ReturnType<typeof setInterval>;
 	let lastTap = { time: 0, side: 0 };
 	let fixedRetries = 0;
+	/** Where the current start() should resume, for whichever source wins */
+	let resumeAt = 0;
+	/** Position of the last early 'ended' on the re-encode, to spot a real end */
+	let lastEarlyEnd = -1;
+	/** Re-encoding because the audio is undecodable (vs. a container fallback) */
+	let fixForAudio = false;
 
 	const duration = $derived(
-		mode === 'fixed' ? (durationHint ?? probedDuration ?? 0) : nativeDuration
+		mode === 'fixed' ? (probedDuration ?? durationHint ?? 0) : nativeDuration
 	);
 	const position = $derived(mode === 'fixed' ? offset + currentTime : currentTime);
 	const seekable = $derived(!live && duration > 0 && isFinite(duration));
@@ -163,6 +169,7 @@
 		const params = new URLSearchParams();
 		if (start > 0) params.set('start', start.toFixed(1));
 		if (fixedTrack > 0) params.set('audio', String(fixedTrack));
+		if (fixForAudio) params.set('fix', 'audio');
 		const extra = params.toString();
 		return extra ? `${transcode!.url}&${extra}` : transcode!.url;
 	}
@@ -299,12 +306,15 @@
 	}
 
 	/** Play the AAC re-encode from `at` seconds; `then` runs if it fails to start. */
-	async function tryFixed(at: number, onSuccess: () => void, onFail: () => void) {
+	async function tryFixed(at: number, onSuccess: () => void, onFail: () => void, generation: number) {
 		cleanup();
 		mode = 'fixed';
 		offset = live ? 0 : at;
 		currentTime = 0;
+		bufferedEnd = 0;
 		await probeFixed();
+		// A newer start() took over while the probe ran
+		if (attempt !== generation) return;
 		// ffmpeg has to open the source before the first byte, so give it longer
 		tryDirect('Compatible audio', fixedUrl(offset), onSuccess, onFail, 25_000);
 	}
@@ -325,7 +335,8 @@
 		audioTracks = [];
 		currentAudioTrack = -1;
 		seeked = false;
-		switchedForSilence = false;
+		resumeAt = from;
+		lastEarlyEnd = -1;
 		mode = 'native';
 		offset = 0;
 		cancelNext();
@@ -359,7 +370,8 @@
 			};
 
 			if (step.kind === 'fixed') {
-				tryFixed(from, onSuccess, onFail);
+				fixForAudio = wantsFixedFirst() && idx === 1;
+				tryFixed(from, onSuccess, onFail, generation);
 				return;
 			}
 			mode = 'native';
@@ -376,6 +388,7 @@
 		if (!transcode || mode === 'fixed') return;
 		const at = position;
 		switchedForSilence = true;
+		fixForAudio = true;
 		audioSilent = false;
 		say('Switching to compatible audio…');
 		attempt++;
@@ -392,14 +405,23 @@
 				// The re-encode failed too; go back to the silent original
 				say("Couldn't fix the audio for this stream");
 				start(at);
-			}
+			},
+			generation
 		);
 	}
 
 	$effect(() => {
 		attempts; // restart when the attempt list changes
 		// start() reads state it goes on to write; only `attempts` restarts it
-		untrack(() => start());
+		untrack(() => {
+			// A new title: forget everything learned about the last one
+			probedDuration = null;
+			fixedTracks = [];
+			fixedTrack = 0;
+			fixedRetries = 0;
+			switchedForSilence = false;
+			start();
+		});
 		return () => {
 			attempt++;
 			cleanup();
@@ -471,8 +493,8 @@
 
 	function onLoadedMetadata() {
 		if (mode === 'fixed') return; // the start offset is already baked into the stream
-		if (!seeked && !live && initialPosition > 0 && video.duration > 0 && initialPosition < video.duration - 5) {
-			video.currentTime = initialPosition;
+		if (!seeked && !live && resumeAt > 0 && video.duration > 0 && resumeAt < video.duration - 5) {
+			video.currentTime = resumeAt;
 			seeked = true;
 		}
 	}
@@ -490,6 +512,7 @@
 			}
 			offset = target;
 			currentTime = 0;
+			bufferedEnd = 0;
 			buffering = true;
 			video.src = fixedUrl(target);
 			attemptPlay();
@@ -568,7 +591,9 @@
 		if (live) return;
 		// A re-encode that ends well short of the title lost its source mid-way;
 		// pick up where it dropped rather than calling the film finished.
-		if (mode === 'fixed' && duration > 0 && position < duration - 30) {
+		// Ending twice at the same spot means the length estimate was wrong
+		if (mode === 'fixed' && duration > 0 && position < duration - 30 && Math.abs(position - lastEarlyEnd) > 5) {
+			lastEarlyEnd = position;
 			seekTo(position, true);
 			return;
 		}

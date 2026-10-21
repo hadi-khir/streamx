@@ -156,10 +156,15 @@ function toItems(kind: 'movie' | 'series', list: any[], cat: string, catName: st
 }
 
 async function build(conn: XtreamConn, state: State) {
-	const [vodCats, seriesCats] = await Promise.all([
-		fetchList(conn, 'get_vod_categories').catch(() => []),
-		fetchList(conn, 'get_series_categories').catch(() => [])
-	]);
+	let listFailed = false;
+	const [vodCats, seriesCats] = await Promise.all(
+		['get_vod_categories', 'get_series_categories'].map((action) =>
+			fetchList(conn, action).catch(() => {
+				listFailed = true;
+				return [];
+			})
+		)
+	);
 
 	const jobs: { kind: 'movie' | 'series'; cat: Category; en: boolean }[] = [];
 	for (const [kind, cats] of [
@@ -202,13 +207,17 @@ async function build(conn: XtreamConn, state: State) {
 		categories,
 		builtAt: Date.now(),
 		// Mostly-failed builds retry soon rather than standing for 12 hours
-		complete: failures <= jobs.length * 0.2
+		complete: !listFailed && failures <= jobs.length * 0.2
 	};
 	if (!catalog.complete) catalog.builtAt = Date.now() - REFRESH_AFTER + 30 * 60 * 1000;
-	if (items.length || !state.catalog) state.catalog = catalog;
+	// A failed rebuild never replaces a good catalog, in memory or on disk
+	const adopt = catalog.complete || !state.catalog || state.catalog.items.length <= items.length;
+	if (adopt) state.catalog = catalog;
+	else state.catalog!.builtAt = catalog.builtAt; // retry in 30 minutes, not every request
 	state.partial = [];
 	state.partialCategories = {};
 
+	if (!adopt || !items.length) return;
 	try {
 		const path = diskPath(providerKey(conn));
 		mkdirSync(dirname(path), { recursive: true });
@@ -274,8 +283,7 @@ export function titleIndex(catalog: Catalog): Map<string, CatalogItem[]> {
 			if (list) list.push(item);
 			else index.set(key, [item]);
 		}
-		// Only complete catalogs are worth remembering an index for
-		if (catalog.complete) byKey.set(catalog, index);
+		byKey.set(catalog, index);
 	}
 	return index;
 }
@@ -285,7 +293,7 @@ export function findItem(catalog: Catalog, kind: 'movie' | 'series', id: number)
 	let ids = idIndexes.get(catalog);
 	if (!ids) {
 		ids = new Map(catalog.items.map((i) => [`${i.kind}:${i.id}`, i]));
-		if (catalog.complete) idIndexes.set(catalog, ids);
+		idIndexes.set(catalog, ids);
 	}
 	return ids.get(`${kind}:${id}`);
 }

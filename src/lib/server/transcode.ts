@@ -139,10 +139,14 @@ export function transcodeAudio(
 				// Respect the browser's pace instead of buffering a whole film in memory
 				if ((controller.desiredSize ?? 1) <= 0) stdout.pause();
 			});
-			stdout.on('end', () => {
+			// Only a clean exit is the end of the title. A newer request killing
+			// this one, or ffmpeg failing, must read as an error so the player
+			// reconnects instead of believing the film finished.
+			proc.on('close', (code) => {
 				if (done) return;
 				done = true;
-				controller.close();
+				if (code === 0) controller.close();
+				else controller.error(new Error(`ffmpeg exited with ${code ?? 'a signal'}`));
 			});
 			proc.on('error', (e) => {
 				if (done) return;
