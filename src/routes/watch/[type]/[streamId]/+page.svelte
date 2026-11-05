@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import VideoPlayer from '$lib/components/VideoPlayer.svelte';
 	import { episodeWatchUrl } from '$lib/episodes';
 	import { downloadUrl } from '$lib/download';
@@ -116,6 +117,16 @@
 <svelte:head><title>{data.name} — StreamX</title></svelte:head>
 
 {#snippet actions()}
+	<a
+		href="/feedback?from={encodeURIComponent(page.url.pathname + page.url.search)}"
+		class="rounded-full p-2 text-white transition-colors hover:text-zinc-300"
+		title="Report a bug or idea"
+		aria-label="Report a bug or idea"
+	>
+		<svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
+		</svg>
+	</a>
 	{#if data.type === 'live' && data.epg.length > 0}
 		<button
 			onclick={() => (guideOpen = !guideOpen)}

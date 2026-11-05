@@ -100,9 +100,26 @@ export const pinnedCategories = sqliteTable(
 	(t) => [uniqueIndex('pin_unique').on(t.userId, t.connectionId, t.contentType, t.categoryId)]
 );
 
+export const feedback = sqliteTable('feedback', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	userId: text('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	kind: text('kind').notNull(), // 'bug' | 'idea'
+	message: text('message').notNull(),
+	/** The page it was reported from, when there was one */
+	page: text('page'),
+	userAgent: text('user_agent'),
+	status: text('status').notNull().default('open'), // 'open' | 'done'
+	createdAt: integer('created_at')
+		.notNull()
+		.$defaultFn(() => Date.now())
+});
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Connection = typeof connections.$inferSelect;
 export type Favorite = typeof favorites.$inferSelect;
 export type WatchProgress = typeof watchProgress.$inferSelect;
 export type PinnedCategory = typeof pinnedCategories.$inferSelect;
+export type Feedback = typeof feedback.$inferSelect;

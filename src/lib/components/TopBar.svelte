@@ -186,6 +186,13 @@
 					{/if}
 					<div class="mt-1 border-t border-white/10 pt-1">
 						<a href="/settings" onclick={() => (menuOpen = false)} class="block px-4 py-2 text-zinc-300 hover:underline">Settings</a>
+						<a
+							href={page.url.pathname === '/feedback' ? '/feedback' : `/feedback?from=${encodeURIComponent(page.url.pathname + page.url.search)}`}
+							onclick={() => (menuOpen = false)}
+							class="block px-4 py-2 text-zinc-300 hover:underline"
+						>
+							Report a bug or idea
+						</a>
 						<form method="POST" action="/logout">
 							<button class="w-full px-4 py-2 text-left text-zinc-300 hover:underline">Sign out of StreamX</button>
 						</form>
