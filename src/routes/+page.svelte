@@ -23,20 +23,17 @@
 		await invalidateAll();
 	}
 
-	/** Resume where you stopped; once something is finished, go to its page instead. */
+	/** A show opens on its page at the current episode; a movie resumes until it's finished. */
 	function recentUrl(entry: RecentEntry): string {
+		if (entry.kind === 'series') return `/series/${entry.seriesId}?conn=${entry.connectionId}`;
 		const q = new URLSearchParams({
 			name: entry.name,
 			icon: entry.icon ?? '',
 			conn: String(entry.connectionId)
 		});
 		if (entry.kind === 'live') return `/watch/live/${entry.streamId}?${q}`;
-		if (!entry.resumable) {
-			if (entry.kind === 'movie') return `/movies/${entry.streamId}?conn=${entry.connectionId}`;
-			if (entry.seriesId) return `/series/${entry.seriesId}?conn=${entry.connectionId}`;
-		}
+		if (!entry.resumable && entry.kind === 'movie') return `/movies/${entry.streamId}?conn=${entry.connectionId}`;
 		if (entry.ext) q.set('ext', entry.ext);
-		if (entry.seriesId) q.set('series', String(entry.seriesId));
 		return `/watch/${entry.kind === 'movie' ? 'movie' : 'series'}/${entry.streamId}?${q}`;
 	}
 

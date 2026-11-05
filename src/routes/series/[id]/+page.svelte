@@ -11,14 +11,10 @@
 	let { data } = $props();
 
 	let favorited = $state(false);
-	let selectedSeason = $state('');
+	// Opens on the season you're in; picking another overrides it until the next show
+	let selectedSeason = $derived(data.upNext?.episode.season ?? data.seasons[0]?.season ?? '');
 	$effect(() => {
 		favorited = data.favorited;
-	});
-	$effect(() => {
-		if (!data.seasons.some((s) => s.season === selectedSeason)) {
-			selectedSeason = data.seasons[0]?.season ?? '';
-		}
 	});
 
 	const season = $derived(data.seasons.find((s) => s.season === selectedSeason));
@@ -175,8 +171,12 @@
 		{:else}
 			<ol>
 				{#each season?.episodes ?? [] as ep (ep.id)}
-					{@const current = data.upNext?.episode.id === ep.id}
-					<li class="group/ep flex items-center gap-2 border-b border-white/10 sm:gap-4 {current ? 'bg-surface-800' : ''}">
+					{@const current = data.upNext?.started && data.upNext.episode.id === ep.id}
+					<li
+						{@attach current ? (el) => el.scrollIntoView({ block: 'nearest' }) : null}
+						aria-current={current ? 'true' : undefined}
+						class="group/ep flex items-center gap-2 border-b border-white/10 sm:gap-4 {current ? 'bg-surface-800 shadow-[inset_3px_0_0_var(--color-accent)]' : ''}"
+					>
 						<a href={episodeUrl(ep)} class="flex min-w-0 flex-1 items-center gap-3 rounded px-1 py-4 transition-colors hover:bg-surface-800 sm:gap-5 sm:px-4">
 							<span class="hidden w-6 shrink-0 text-center text-2xl text-zinc-400 sm:block">{ep.num}</span>
 							<div class="relative aspect-video w-28 shrink-0 overflow-hidden rounded bg-surface-800 sm:w-36">
@@ -196,6 +196,9 @@
 								{/if}
 							</div>
 							<div class="min-w-0 flex-1">
+								{#if current}
+									<p class="mb-1 text-xs font-semibold text-accent">{data.upNext?.resume ? 'Continue watching' : 'Up next'}</p>
+								{/if}
 								<div class="flex items-baseline justify-between gap-3">
 									<p class="truncate text-sm font-semibold text-zinc-100 sm:text-base">
 										<span class="sm:hidden">{ep.num}. </span>{episodeTitle(ep.title)}

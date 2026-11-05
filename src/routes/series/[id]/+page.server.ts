@@ -68,7 +68,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	// Netflix's one button: resume the episode you're in the middle of, else
 	// the one after the last you finished, else the very first
 	const ordered = seasons.flatMap((s) => s.episodes);
-	let upNext: { episode: Episode; label: string; resume: boolean } | null = null;
+	let upNext: { episode: Episode; label: string; resume: boolean; started: boolean } | null = null;
 	if (ordered.length) {
 		const last = [...progressRows].sort((a, b) => b.updatedAt - a.updatedAt)[0];
 		const idx = last ? ordered.findIndex((e) => e.id === last.streamId) : -1;
@@ -83,7 +83,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			episode = ordered[Math.min(idx + 1, ordered.length - 1)];
 		}
 		const where = `S${episode.season}:E${episode.num}`;
-		upNext = { episode, resume, label: idx < 0 ? 'Play' : `${resume ? 'Resume' : 'Play'} ${where}` };
+		upNext = { episode, resume, started: idx >= 0, label: idx < 0 ? 'Play' : `${resume ? 'Resume' : 'Play'} ${where}` };
 	}
 
 	const poster = tmdb?.poster || info.cover || null;
