@@ -30,6 +30,19 @@ npm run dev
 Open http://localhost:5173, register an account, then add your Xtream Codes connection
 (server URL, username, password) under Settings.
 
+## Mac app
+
+`desktop/` is a native Swift app that opens the deployed site in its own window, using the
+system's WebKit. Build it with the Xcode command line tools:
+
+```bash
+desktop/build.sh
+```
+
+This produces `desktop/dist/StreamX.dmg`. The site address is set at the top of
+`desktop/StreamX.swift`. The build is ad-hoc signed, so another Mac will need it signed with a
+Developer ID, or will ask you to approve it in System Settings.
+
 ## Docker
 
 ```bash

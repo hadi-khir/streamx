@@ -10,7 +10,13 @@ import type { RequestHandler } from './$types';
  * `?probe=1` describes the source instead — its length, which a piped stream
  * can't report, and its audio tracks.
  */
-export const GET: RequestHandler = async ({ params, url, locals }) => {
+// WebKit won't play a response without byte ranges: it asks for the first two
+// bytes, and gives up unless they come back as a range of a known size. So it's
+// told a size no stream reaches, and then asks for the whole of that.
+const WEBKIT_SIZE = 1e12;
+const WEBKIT_RANGE = new RegExp(`^bytes=(\\d+)-${WEBKIT_SIZE - 1}$`);
+
+export const GET: RequestHandler = async ({ params, url, locals, request }) => {
 	const user = locals.user!;
 	const conn = requireConnectionApi(user, Number(params.connId));
 
@@ -37,6 +43,34 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 		}
 	}
 
+	const range = request.headers.get('range');
+	if (range === 'bytes=0-1') {
+		// An MP4 opens with its first box's size, far too small to reach these two bytes
+		return new Response(new Uint8Array(2), {
+			status: 206,
+			headers: {
+				'Content-Type': 'video/mp4',
+				'Cache-Control': 'no-store',
+				'Accept-Ranges': 'bytes',
+				'Content-Range': `bytes 0-1/${WEBKIT_SIZE}`
+			}
+		});
+	}
+	const webkitFrom = range?.match(WEBKIT_RANGE)?.[1];
+	// Asking past what it got means the pipe ended. Any refusal has WebKit retrying
+	// dozens of times a second, so the request just idles until the page drops it.
+	if (webkitFrom && webkitFrom !== '0') {
+		return new Response(new ReadableStream(), {
+			status: 206,
+			headers: {
+				'Content-Type': 'video/mp4',
+				'Cache-Control': 'no-store',
+				'Accept-Ranges': 'bytes',
+				'Content-Range': `bytes ${webkitFrom}-${WEBKIT_SIZE - 1}/${WEBKIT_SIZE}`
+			}
+		});
+	}
+
 	const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
 	const audioTrack = Math.max(0, Math.floor(Number(url.searchParams.get('audio')) || 0));
 	// Only an undecodable track is worth remembering — not a container fallback
@@ -44,7 +78,27 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 		rememberFix(conn.id, type, streamId, url.searchParams.get('series'));
 	}
 
-	return new Response(transcodeAudio(conn.id, source, { start, live, audioTrack }), {
+	// Only WebKit cares how HEVC is tagged. Cached from the player's own probe.
+	const videoCodec =
+		webkitFrom && !live
+			? await probe(source, `${conn.id}:${type}:${streamId}`)
+					.then((p) => p.video)
+					.catch(() => null)
+			: null;
+
+	const body = transcodeAudio(conn.id, source, { start, live, audioTrack, videoCodec });
+	if (webkitFrom) {
+		return new Response(body, {
+			status: 206,
+			headers: {
+				'Content-Type': 'video/mp4',
+				'Cache-Control': 'no-store',
+				'Accept-Ranges': 'bytes',
+				'Content-Range': `bytes 0-${WEBKIT_SIZE - 1}/${WEBKIT_SIZE}`
+			}
+		});
+	}
+	return new Response(body, {
 		headers: {
 			'Content-Type': 'video/mp4',
 			'Cache-Control': 'no-store',
