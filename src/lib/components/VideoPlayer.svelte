@@ -1,6 +1,8 @@
 <script lang="ts">
 	import Hls from 'hls.js';
 	import { onDestroy, untrack, type Snippet } from 'svelte';
+	import { fade } from 'svelte/transition';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	export interface Attempt {
 		label: string;
@@ -892,13 +894,16 @@
 	<div class="absolute inset-0" onpointerup={onSurfacePointer} role="presentation"></div>
 
 	{#if status === 'loading'}
-		<div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/60">
-			<div class="h-14 w-14 animate-spin rounded-full border-[3px] border-accent border-t-transparent"></div>
+		<div
+			out:fade={{ duration: 300 }}
+			class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/60"
+		>
+			<Spinner />
 			{#if title}
-				<p class="mt-5 max-w-md truncate px-6 text-center text-lg font-semibold text-white">{title}</p>
+				<p class="animate-fade-in mt-6 max-w-md truncate px-6 text-center text-lg font-semibold tracking-tight text-white">{title}</p>
 			{/if}
 			{#if subtitle}
-				<p class="mt-1 max-w-md truncate px-6 text-center text-sm text-zinc-400">{subtitle}</p>
+				<p class="animate-fade-in mt-1 max-w-md truncate px-6 text-center text-sm text-zinc-400">{subtitle}</p>
 			{/if}
 		</div>
 	{:else if status === 'error'}
@@ -942,8 +947,11 @@
 	{/if}
 
 	{#if buffering && status === 'playing'}
-		<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
-			<div class="h-14 w-14 animate-spin rounded-full border-[3px] border-accent border-t-transparent drop-shadow"></div>
+		<div out:fade={{ duration: 150 }} class="pointer-events-none absolute inset-0 flex items-center justify-center">
+			<!-- A dark disc so the ring still reads over a bright picture -->
+			<div class="animate-fade-in rounded-full bg-black/60 p-3 [animation-delay:150ms]">
+				<Spinner />
+			</div>
 		</div>
 	{/if}
 
@@ -1050,7 +1058,8 @@
 				</svg>
 			</button>
 		{/if}
-		<div class="min-w-0 flex-1">
+		<!-- While loading, the title is shown under the spinner instead -->
+		<div class="min-w-0 flex-1 transition-opacity duration-300 {status === 'loading' ? 'opacity-0' : ''}">
 			{#if title}<p class="truncate text-base font-semibold text-white sm:text-lg">{title}</p>{/if}
 			{#if subtitle}<p class="truncate text-xs text-zinc-300 sm:text-sm">{subtitle}</p>{/if}
 		</div>
