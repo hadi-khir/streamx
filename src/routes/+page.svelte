@@ -9,6 +9,45 @@
 
 	type RecentEntry = (typeof data.recents)[number];
 
+	// Gone from the page at once; the server leaves them out from the next load on
+	let hiddenNow = $state(new Set<string>());
+	let undoable = $state<Pick | null>(null);
+	let undoTimer: ReturnType<typeof setTimeout>;
+	const pickKey = (p: Pick) => `${p.kind}:${p.id}`;
+	const shown = (items: Pick[]) => items.filter((p) => !hiddenNow.has(pickKey(p)));
+
+	function sendHidden(method: 'POST' | 'DELETE', p: Pick) {
+		return fetch('/api/hidden', {
+			method,
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ connectionId: data.connId, kind: p.kind, streamId: p.id, name: p.name })
+		}).catch(() => null);
+	}
+
+	function putBack(p: Pick) {
+		const next = new Set(hiddenNow);
+		next.delete(pickKey(p));
+		hiddenNow = next;
+		undoable = null;
+	}
+
+	async function notForMe(p: Pick) {
+		hiddenNow = new Set(hiddenNow).add(pickKey(p));
+		undoable = p;
+		clearTimeout(undoTimer);
+		undoTimer = setTimeout(() => (undoable = null), 8000);
+		const res = await sendHidden('POST', p);
+		// Not saved, so it would be back on the next load anyway: don't pretend otherwise
+		if (!res?.ok) putBack(p);
+	}
+
+	function undoNotForMe() {
+		if (!undoable) return;
+		const p = undoable;
+		putBack(p);
+		sendHidden('DELETE', p);
+	}
+
 	async function removeRecent(entry: RecentEntry) {
 		const payload =
 			entry.kind === 'series'
@@ -81,11 +120,11 @@
 <svelte:head><title>Home — Vesper</title></svelte:head>
 
 {#snippet pickRow(title: string, items: Pick[], href = '')}
-	{#if items.length}
+	{#if shown(items).length}
 		<MediaRow {title} {href}>
-			{#each items as item (item.kind + item.id)}
+			{#each shown(items) as item (item.kind + item.id)}
 				<div class={poster}>
-					<MediaCard href={pickUrl(item)} image={item.image} title={item.name} badge={star(item.rating)} />
+					<MediaCard href={pickUrl(item)} image={item.image} title={item.name} badge={star(item.rating)} onNotForMe={() => notForMe(item)} />
 				</div>
 			{/each}
 		</MediaRow>
@@ -95,9 +134,9 @@
 {#snippet ranked(items: Pick[])}
 	{#if items.length >= 5}
 		<MediaRow title="Most watched this week">
-			{#each items.slice(0, 10) as item, i (item.kind + item.id)}
+			{#each shown(items.slice(0, 10)) as item, i (item.kind + item.id)}
 				<div class={poster}>
-					<MediaCard href={pickUrl(item)} image={item.image} title={item.name} rank={i + 1} />
+					<MediaCard href={pickUrl(item)} image={item.image} title={item.name} rank={i + 1} onNotForMe={() => notForMe(item)} />
 				</div>
 			{/each}
 		</MediaRow>
@@ -248,5 +287,12 @@
 				Watch something and this page learns what you like — picks, “Because you watched” rows and more.
 			</p>
 		{/if}
+	</div>
+{/if}
+
+{#if undoable}
+	<div class="fixed bottom-6 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-4 rounded-full border border-white/10 bg-surface-900 py-2.5 pr-3 pl-5 text-sm shadow-2xl shadow-black/60" role="status">
+		<span class="truncate text-zinc-200">We'll suggest less like this</span>
+		<button onclick={undoNotForMe} class="shrink-0 rounded-full px-3 py-1 font-medium text-accent transition-colors hover:text-accent-hover">Undo</button>
 	</div>
 {/if}

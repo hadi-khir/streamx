@@ -112,7 +112,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		poster,
 		upNext,
 		// Streamed: the page shouldn't wait on recommendations
-		similar: moreLikeThis(conn, 'series', seriesId, {
+		similar: moreLikeThis(conn, user.id, 'series', seriesId, {
 			name,
 			categoryId: info.category_id,
 			genre: info.genre,

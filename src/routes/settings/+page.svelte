@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { displayName } from '$lib/titles';
 
 	let { data, form } = $props();
 	let testing = $state(false);
@@ -138,5 +139,24 @@
 			Xtream credentials are stored in plain text on the server — they are required to build
 			stream URLs. Run Vesper only on hardware you trust.
 		</p>
+	</section>
+
+	<section class="mt-10">
+		<h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-400 uppercase">Not for me</h2>
+		<p class="mt-2 text-sm text-zinc-500">Titles you've asked not to be suggested. You can still find them by searching or browsing.</p>
+		<div class="mt-3 space-y-2">
+			{#each data.hidden as title (title.id)}
+				<div class="flex items-center gap-3 rounded-xl border border-surface-800 bg-surface-900 px-4 py-2.5">
+					<p class="min-w-0 flex-1 truncate text-sm text-zinc-200">{displayName(title.name)}</p>
+					<span class="text-xs text-zinc-500">{title.kind === 'movie' ? 'Movie' : 'Show'}</span>
+					<form method="POST" action="?/restoreHidden" use:enhance>
+						<input type="hidden" name="id" value={title.id} />
+						<button class="rounded-lg border border-surface-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-accent hover:text-accent">Restore</button>
+					</form>
+				</div>
+			{:else}
+				<p class="rounded-xl border border-dashed border-surface-700 px-4 py-6 text-center text-sm text-zinc-500">Nothing hidden.</p>
+			{/each}
+		</div>
 	</section>
 </div>

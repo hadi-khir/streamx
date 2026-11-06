@@ -41,6 +41,7 @@ import {
 	type Taste
 } from '$lib/server/recommend';
 import { lookup } from '$lib/server/tmdb';
+import { hiddenFilter } from '$lib/server/hidden';
 import { displayName } from '$lib/titles';
 import type { PageServerLoad } from './$types';
 
@@ -305,7 +306,9 @@ async function seriesArt(userId: string, entries: RecentEntry[]): Promise<Record
 	return art;
 }
 
-async function popularShows(userId: string, conn: Connection) {
+type IsHidden = ReturnType<typeof hiddenFilter>;
+
+async function popularShows(userId: string, conn: Connection, isHidden: IsHidden) {
 	try {
 		const cats = rowCategories(
 			userId,
@@ -333,14 +336,14 @@ async function popularShows(userId: string, conn: Connection) {
 					.catch(() => [])
 			)
 		);
-		return uniqueByTitle(roundRobin(lists, ROW_SIZE * 2)).slice(0, ROW_SIZE);
+		return uniqueByTitle(roundRobin(lists, ROW_SIZE * 2).filter((s) => !isHidden('series', s.id, s.name))).slice(0, ROW_SIZE);
 	} catch {
 		// A dead row beats a dead page
 		return [];
 	}
 }
 
-async function popularMovies(userId: string, conn: Connection) {
+async function popularMovies(userId: string, conn: Connection, isHidden: IsHidden) {
 	try {
 		const cats = rowCategories(userId, conn.id, 'vod', (await getVodCategories(conn)) ?? []);
 		const lists = await Promise.all(
@@ -361,7 +364,7 @@ async function popularMovies(userId: string, conn: Connection) {
 					.catch(() => [])
 			)
 		);
-		return uniqueByTitle(roundRobin(lists, ROW_SIZE * 2)).slice(0, ROW_SIZE);
+		return uniqueByTitle(roundRobin(lists, ROW_SIZE * 2).filter((m) => !isHidden('movie', m.id, m.name))).slice(0, ROW_SIZE);
 	} catch {
 		return [];
 	}
@@ -558,7 +561,8 @@ export const load: PageServerLoad = ({ locals }) => {
 	}
 
 	const ctx = personal(user.id, conn);
-	const shows = popularShows(user.id, conn);
+	const isHidden = hiddenFilter(user.id, conn.serverUrl);
+	const shows = popularShows(user.id, conn, isHidden);
 	const trend = trendingRow(ctx);
 
 	return {
@@ -574,7 +578,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		trending: trend.catch(() => [] as Pick[]),
 		newArrivals: newRow(ctx).catch(() => [] as Pick[]),
 		popularShows: shows,
-		popularMovies: popularMovies(user.id, conn),
+		popularMovies: popularMovies(user.id, conn, isHidden),
 		liveChannels: liveChannels(user.id, conn)
 	};
 };

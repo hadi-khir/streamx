@@ -5,6 +5,7 @@ import { findItem, genreWords, getCatalog, titleIndex, type Catalog, type Catalo
 import type { XtreamConn } from '$lib/server/xtream';
 import { isPlayableTitle, titleKey } from '$lib/server/popular';
 import { lookup, recommendations, trending, type TmdbTitle } from '$lib/server/tmdb';
+import { hiddenFilter, hiddenOnProvider } from '$lib/server/hidden';
 
 /**
  * Suggestions from what you actually watch. Two kinds of evidence, blended:
@@ -22,6 +23,8 @@ const LONG_TERM_SHARE = 0.25;
 const BAILED_SECONDS = 5 * 60;
 const BAILED_AFTER_DAYS = 3;
 const REJECTED = -0.5;
+// Saying so outright is firmer than leaving, and outweighs having watched it
+const NOT_FOR_ME = -0.8;
 // How many watched titles get asked about, and how many of them become rows
 const AUDIENCE_SEEDS = 8;
 const AUDIENCE_TIMEOUT = 10_000;
@@ -124,10 +127,12 @@ interface Viewing {
 	seconds: number;
 	furthest: number;
 	listed: boolean;
+	notForMe: boolean;
 }
 
 /** What one title's viewing says about you: positive if you liked it, negative if you left. */
 function interest(v: Viewing, now: number): number {
+	if (v.notForMe) return NOT_FOR_ME;
 	let score: number;
 	if (v.kind === 'series' && (v.finished > 0 || v.started > 1)) {
 		// Every further episode is another decision to keep watching
@@ -211,7 +216,8 @@ export function buildTaste(userId: string, serverUrl: string, catalog: Catalog):
 				finished: 0,
 				seconds: 0,
 				furthest: 0,
-				listed: false
+				listed: false,
+				notForMe: false
 			};
 			titles.set(key, entry);
 		}
@@ -242,7 +248,29 @@ export function buildTaste(userId: string, serverUrl: string, catalog: Catalog):
 				finished: 0,
 				seconds: 0,
 				furthest: 0,
-				listed: true
+				listed: true,
+				notForMe: false
+			});
+		}
+	}
+
+	for (const h of hiddenOnProvider(userId, serverUrl)) {
+		const kind = h.kind === 'series' ? 'series' : 'movie';
+		const key = `${kind}:${h.streamId}`;
+		const entry = titles.get(key);
+		if (entry) entry.notForMe = true;
+		else {
+			titles.set(key, {
+				kind,
+				id: h.streamId,
+				name: h.name,
+				last: h.createdAt,
+				started: 0,
+				finished: 0,
+				seconds: 0,
+				furthest: 0,
+				listed: false,
+				notForMe: true
 			});
 		}
 	}
@@ -269,6 +297,7 @@ export function buildTaste(userId: string, serverUrl: string, catalog: Catalog):
 		}
 	}
 	taste.anchors.sort((a, b) => b.weight - a.weight);
+	taste.rejected.sort((a, b) => a.weight - b.weight);
 
 	const idf = rarity(catalog);
 	taste.genreNorm = norm([...taste.genres].map(([g, w]) => w * (idf.genres.get(g) ?? 0)));
@@ -618,6 +647,7 @@ export function genreRow(catalog: Catalog, taste: Taste, skip: Set<string>, limi
  */
 export async function moreLikeThis(
 	conn: XtreamConn,
+	userId: string,
 	kind: 'movie' | 'series',
 	id: number,
 	fallback: { name: string; categoryId?: unknown; genre?: unknown; cast?: unknown },
@@ -643,6 +673,9 @@ export async function moreLikeThis(
 			people: typeof fallback.cast === 'string' ? fallback.cast.toLowerCase().split(/\s*,\s*/).slice(0, 6) : []
 		};
 	}
-	// Unlike the home rows, "more like this" may include things you've seen
-	return similarTo(catalog, anchor, null, limit);
+	// Unlike the home rows, "more like this" may include things you've seen, though
+	// not what you've said is not for you. Ask for spares to fill the gaps those leave.
+	const isHidden = hiddenFilter(userId, conn.serverUrl);
+	const picks = await similarTo(catalog, anchor, null, limit * 2);
+	return picks.filter((p) => !isHidden(p.kind, p.id, p.name)).slice(0, limit);
 }

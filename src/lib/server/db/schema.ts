@@ -100,6 +100,27 @@ export const pinnedCategories = sqliteTable(
 	(t) => [uniqueIndex('pin_unique').on(t.userId, t.connectionId, t.contentType, t.categoryId)]
 );
 
+/** Titles marked "not for me": hidden from suggestions, and counted against what they're like */
+export const hiddenTitles = sqliteTable(
+	'hidden_titles',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		connectionId: integer('connection_id')
+			.notNull()
+			.references(() => connections.id, { onDelete: 'cascade' }),
+		kind: text('kind').notNull(), // 'movie' | 'series'
+		streamId: integer('stream_id').notNull(),
+		name: text('name').notNull(),
+		createdAt: integer('created_at')
+			.notNull()
+			.$defaultFn(() => Date.now())
+	},
+	(t) => [uniqueIndex('hidden_unique').on(t.userId, t.connectionId, t.kind, t.streamId)]
+);
+
 export const feedback = sqliteTable('feedback', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	userId: text('user_id')
@@ -123,3 +144,4 @@ export type Favorite = typeof favorites.$inferSelect;
 export type WatchProgress = typeof watchProgress.$inferSelect;
 export type PinnedCategory = typeof pinnedCategories.$inferSelect;
 export type Feedback = typeof feedback.$inferSelect;
+export type HiddenTitle = typeof hiddenTitles.$inferSelect;

@@ -71,7 +71,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		progress: progress ?? null,
 		favorited,
 		// Streamed: the page shouldn't wait on recommendations
-		similar: moreLikeThis(conn, 'movie', streamId, {
+		similar: moreLikeThis(conn, user.id, 'movie', streamId, {
 			name,
 			categoryId: movieData.category_id,
 			genre: info.genre,

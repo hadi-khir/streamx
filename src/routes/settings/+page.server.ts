@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { connections, users } from '$lib/server/db/schema';
+import { connections, hiddenTitles, users } from '$lib/server/db/schema';
 import { listConnections } from '$lib/server/connections';
 import { authenticate, validateServerUrl } from '$lib/server/xtream';
 import type { Actions, PageServerLoad } from './$types';
@@ -16,7 +16,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			serverUrl: c.serverUrl,
 			username: c.username,
 			active: c.id === user.activeConnectionId
-		}))
+		})),
+		hidden: db
+			.select({ id: hiddenTitles.id, name: hiddenTitles.name, kind: hiddenTitles.kind })
+			.from(hiddenTitles)
+			.where(eq(hiddenTitles.userId, user.id))
+			.orderBy(desc(hiddenTitles.createdAt))
+			.all()
 	};
 };
 
@@ -74,6 +80,14 @@ export const actions: Actions = {
 				.run();
 		}
 		return { success: 'Connection removed' };
+	},
+
+	restoreHidden: async ({ locals, request }) => {
+		const form = await request.formData();
+		db.delete(hiddenTitles)
+			.where(and(eq(hiddenTitles.id, Number(form.get('id'))), eq(hiddenTitles.userId, locals.user!.id)))
+			.run();
+		return { success: 'It can be suggested again' };
 	},
 
 	activate: async ({ locals, request }) => {
