@@ -47,6 +47,10 @@
 	const NEXT_DELAY = 10;
 	const SKIP = 10;
 
+	// Seconds of the fed re-encode to hold ahead of and behind the playhead
+	const FEED_AHEAD = 60;
+	const FEED_BEHIND = 30;
+
 	const VOLUME_KEY = 'streamx:volume';
 	const MUTED_KEY = 'streamx:muted';
 
@@ -64,6 +68,8 @@
 	let container: HTMLDivElement;
 	let bar: HTMLDivElement | undefined = $state();
 	let hls: Hls | null = null;
+	let feed: AbortController | null = null;
+	let fixedVideoCodec: string | null = null;
 
 	let status = $state<'loading' | 'playing' | 'error'>('loading');
 	let buffering = $state(false);
@@ -144,6 +150,103 @@
 			hls.destroy();
 			hls = null;
 		}
+		stopFeed();
+	}
+
+	/**
+	 * WebKit won't play a <video src> without byte ranges, and a pipe has none,
+	 * so there the player reads the re-encode itself and feeds it through MSE.
+	 */
+	function feedsFixedStream(): boolean {
+		const ua = navigator.userAgent;
+		return typeof MediaSource !== 'undefined' && /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
+	}
+
+	function stopFeed() {
+		feed?.abort();
+		feed = null;
+	}
+
+	function openFixed(url: string) {
+		stopFeed();
+		if (!feedsFixedStream()) {
+			video.src = url;
+			video.load();
+			return;
+		}
+		const controller = new AbortController();
+		feed = controller;
+		const source = new MediaSource();
+		const objectUrl = URL.createObjectURL(source);
+		// However the video moves on from this stream, the provider connection must go
+		source.addEventListener('sourceclose', () => controller.abort());
+		source.addEventListener(
+			'sourceopen',
+			() => {
+				URL.revokeObjectURL(objectUrl);
+				pumpFixed(source, url, controller.signal).catch(() => {
+					if (controller.signal.aborted || source.readyState !== 'open') return;
+					// Surfaces as the video's error event, which handles a failed stream
+					source.endOfStream('network');
+				});
+			},
+			{ once: true }
+		);
+		video.src = objectUrl;
+	}
+
+	async function pumpFixed(source: MediaSource, url: string, signal: AbortSignal) {
+		const res = await fetch(url, { signal });
+		if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+		// WebKit decodes what the stream's own header says; this only has to name the family
+		const codec = fixedVideoCodec === 'hevc' ? 'hvc1.2.4.L120.90' : 'avc1.640028';
+		const buffer = source.addSourceBuffer(`video/mp4; codecs="${codec},mp4a.40.2"`);
+		const settled = () =>
+			new Promise((resolve) => buffer.addEventListener('updateend', resolve, { once: true }));
+		const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+		const reader = res.body.getReader();
+		for (;;) {
+			const { value, done } = await reader.read();
+			if (signal.aborted) return;
+			if (done) {
+				source.endOfStream();
+				return;
+			}
+
+			// Not reading is what slows ffmpeg, and with it the provider connection
+			while (
+				!signal.aborted &&
+				buffer.buffered.length &&
+				buffer.buffered.end(buffer.buffered.length - 1) - video.currentTime > FEED_AHEAD
+			) {
+				await pause(500);
+			}
+			if (signal.aborted) return;
+
+			if (buffer.buffered.length && video.currentTime - buffer.buffered.start(0) > FEED_BEHIND) {
+				buffer.remove(0, video.currentTime - FEED_BEHIND);
+				await settled();
+			}
+			for (;;) {
+				try {
+					buffer.appendBuffer(value);
+					break;
+				} catch (e) {
+					if ((e as DOMException).name !== 'QuotaExceededError') throw e;
+					// Full: wait for playback to free some of what's already been watched
+					await pause(1000);
+					if (signal.aborted) return;
+					const played = video.currentTime - 10;
+					if (buffer.buffered.length && played > buffer.buffered.start(0)) {
+						buffer.remove(0, played);
+						await settled();
+					}
+				}
+			}
+			await settled();
+		}
 	}
 
 	/** Whether this browser can decode `codec` itself, as far as we can tell. */
@@ -182,6 +285,7 @@
 			if (!res.ok) return;
 			const info = await res.json();
 			if (info.duration) probedDuration = info.duration;
+			fixedVideoCodec = info.video ?? null;
 			fixedTracks = (info.audio ?? []).map(
 				(a: { index: number; language: string | null; title: string | null; codec: string }) => ({
 					index: a.index,
@@ -274,7 +378,8 @@
 		url: string,
 		onSuccess: () => void,
 		onFail: () => void,
-		timeout = 15_000
+		timeout = 15_000,
+		fixed = false
 	) {
 		cleanup();
 		let settled = false;
@@ -299,8 +404,12 @@
 
 		video.addEventListener('canplay', onCanPlay);
 		video.addEventListener('error', onErr);
-		video.src = url;
-		video.load();
+		if (fixed) {
+			openFixed(url);
+		} else {
+			video.src = url;
+			video.load();
+		}
 
 		setTimeout(() => finish(false), timeout);
 	}
@@ -316,7 +425,7 @@
 		// A newer start() took over while the probe ran
 		if (attempt !== generation) return;
 		// ffmpeg has to open the source before the first byte, so give it longer
-		tryDirect('Compatible audio', fixedUrl(offset), onSuccess, onFail, 25_000);
+		tryDirect('Compatible audio', fixedUrl(offset), onSuccess, onFail, 25_000, true);
 	}
 
 	function wantsFixedFirst(): boolean {
@@ -349,7 +458,9 @@
 		// Undecodable audio goes straight to the re-encode; otherwise it's the
 		// last resort for containers the browser refuses outright (MKV, AVI).
 		if (transcode) {
-			if (wantsFixedFirst()) steps.unshift({ kind: 'fixed' });
+			// WebKit can't open these at all, and each try spends the provider's one connection
+			const refused = feedsFixedStream() && /[?&]ext=(mkv|avi)\b/i.test(transcode.url);
+			if (wantsFixedFirst() || refused) steps.unshift({ kind: 'fixed' });
 			else steps.push({ kind: 'fixed' });
 		}
 
@@ -416,6 +527,7 @@
 		untrack(() => {
 			// A new title: forget everything learned about the last one
 			probedDuration = null;
+			fixedVideoCodec = null;
 			fixedTracks = [];
 			fixedTrack = 0;
 			fixedRetries = 0;
@@ -506,7 +618,9 @@
 		if (mode === 'fixed') {
 			// Within what's already arrived, a plain seek is instant
 			const local = target - offset;
-			if (!force && local >= 0 && local <= bufferedEnd) {
+			// What's been watched a while ago may no longer be held
+			const bufferedStart = video.buffered.length ? video.buffered.start(0) : 0;
+			if (!force && local >= bufferedStart && local <= bufferedEnd) {
 				video.currentTime = local;
 				return;
 			}
@@ -514,7 +628,7 @@
 			currentTime = 0;
 			bufferedEnd = 0;
 			buffering = true;
-			video.src = fixedUrl(target);
+			openFixed(fixedUrl(target));
 			attemptPlay();
 			return;
 		}

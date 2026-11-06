@@ -92,7 +92,7 @@ export function knownToNeedFix(connId: number, type: string, streamId: number, s
 export function transcodeAudio(
 	connId: number,
 	source: string,
-	opts: { start: number; live: boolean; audioTrack: number; videoCodec: string | null }
+	opts: { start: number; live: boolean; audioTrack: number }
 ): ReadableStream<Uint8Array> {
 	running.get(connId)?.kill('SIGKILL');
 
@@ -108,8 +108,6 @@ export function transcodeAudio(
 		'-map', '0:v:0',
 		'-map', `0:a:${opts.audioTrack}?`,
 		'-c:v', 'copy',
-		// WebKit only plays HEVC tagged hvc1, and ffmpeg refuses the tag on anything else
-		...(opts.videoCodec === 'hevc' ? ['-tag:v', 'hvc1'] : []),
 		'-c:a', 'aac',
 		'-ac', '2',
 		'-b:a', '192k',
