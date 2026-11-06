@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { connections, watchProgress } from '$lib/server/db/schema';
 import { getConnection, requireConnectionApi } from '$lib/server/connections';
+import { notePlayback } from '$lib/server/season-download';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -17,6 +18,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		error(400, 'Invalid progress payload');
 	}
 	requireConnectionApi(user, connectionId);
+	notePlayback(connectionId);
 
 	const position = Number(body.position) || 0;
 	const duration = Number(body.duration) || 0;

@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { requireConnectionApi } from '$lib/server/connections';
 import { buildStreamUrl } from '$lib/server/xtream';
 import { probe, rememberFix, transcodeAudio } from '$lib/server/transcode';
+import { yieldForPlayback } from '$lib/server/season-download';
 import type { RequestHandler } from './$types';
 
 /**
@@ -17,6 +18,9 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const { type, streamId } = params;
 	if (!['live', 'movie', 'series'].includes(type)) error(400, 'Invalid stream type');
 	if (!/^\d+$/.test(streamId)) error(400, 'Invalid stream id');
+
+	// A season download sharing this login steps aside
+	await yieldForPlayback(conn.id);
 
 	const live = type === 'live';
 	const ext = url.searchParams.get('ext') || (live ? 'ts' : 'mp4');

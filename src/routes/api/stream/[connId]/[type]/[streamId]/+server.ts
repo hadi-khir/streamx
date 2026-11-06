@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { requireConnectionApi } from '$lib/server/connections';
 import { buildStreamUrl } from '$lib/server/xtream';
+import { notePlayback, yieldForPlayback } from '$lib/server/season-download';
 import type { RequestHandler } from './$types';
 
 const UA = 'StreamX/1.0';
@@ -92,6 +93,7 @@ export const GET: RequestHandler = async ({ params, url, request, locals }) => {
 	// Segment / sub-playlist requests (already-absolute upstream URL in ?seg=)
 	const seg = url.searchParams.get('seg');
 	if (seg) {
+		notePlayback(conn.id);
 		if (!seg.startsWith('http://') && !seg.startsWith('https://')) {
 			error(400, 'Invalid segment URL');
 		}
@@ -122,6 +124,9 @@ export const GET: RequestHandler = async ({ params, url, request, locals }) => {
 		if (cl) headers.set('Content-Length', cl);
 		return new Response(upstream.body, { headers });
 	}
+
+	// A season download sharing this login steps aside
+	await yieldForPlayback(conn.id);
 
 	// Main stream request
 	const streamUrl = buildStreamUrl(
