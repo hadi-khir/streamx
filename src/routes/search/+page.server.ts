@@ -1,13 +1,24 @@
 import { requireConnection } from '$lib/server/connections';
 import { searchLive, type SearchItem } from '$lib/server/xtream';
-import { getCatalog, type CatalogItem } from '$lib/server/catalog';
+import { getCatalog, type Catalog, type CatalogItem } from '$lib/server/catalog';
 import { isPlayableTitle } from '$lib/server/popular';
+import { bestCopy, copiesOf, hasLanguage, languagesOf } from '$lib/server/versions';
 import { displayName } from '$lib/titles';
 import type { PageServerLoad } from './$types';
 
 const MAX_PER_TYPE = 60;
+const MAX_TITLES = 60;
 // A cold catalog gets this long to come up before search makes do
 const CATALOG_WAIT = 15_000;
+
+interface TitleResult {
+	type: 'movie' | 'series';
+	id: number;
+	name: string;
+	icon: string;
+	year: number | null;
+	languages: string[];
+}
 
 function fold(text: string): string {
 	return text
@@ -16,34 +27,51 @@ function fold(text: string): string {
 		.replace(/[̀-ͯ]/g, '');
 }
 
+/** Best match first: the whole title, then titles starting with the query, then a word starting with it, then anywhere. */
+function matchScore(name: string, q: string): number {
+	const at = name.indexOf(q);
+	if (at < 0) return -1;
+	return name === q ? 100 : at === 0 ? 60 : /[^a-z0-9]/.test(name[at - 1]) ? 35 : 10;
+}
+
 /**
- * Best match first: the whole title, then titles starting with the query,
- * then a word starting with it, then anywhere. English and rated titles break
- * ties, so "dune" finds Dune before a dubbed copy.
+ * Each title once, as the copy in the viewer's language. Titles they can't watch
+ * in that language come back separately, so they don't crowd the ones they can.
  */
-function rank(items: CatalogItem[], q: string): CatalogItem[] {
-	const scored: { item: CatalogItem; score: number }[] = [];
-	for (const item of items) {
-		const name = fold(displayName(item.name));
-		const at = name.indexOf(q);
-		if (at < 0 || !isPlayableTitle(item.name)) continue;
-		let score = name === q ? 100 : at === 0 ? 60 : /[^a-z0-9]/.test(name[at - 1]) ? 35 : 10;
-		if (item.en) score += 8;
-		if (item.image) score += 4;
-		score += (item.rating ?? 0) / 10;
-		scored.push({ item, score });
+function search(catalog: Catalog, q: string, language: string): { titles: TitleResult[]; otherLanguages: TitleResult[] } {
+	const matches = new Map<CatalogItem[], number>();
+	for (const item of catalog.items) {
+		if (!isPlayableTitle(item.name)) continue;
+		const score = matchScore(fold(displayName(item.name)), q);
+		if (score < 0) continue;
+		const copies = copiesOf(catalog, item);
+		matches.set(copies, Math.max(score, matches.get(copies) ?? 0));
 	}
+
+	const scored = [...matches].map(([copies, match]) => {
+		const best = bestCopy(catalog, copies, language);
+		const languages = languagesOf(catalog, copies);
+		return {
+			score: match + (best.image ? 4 : 0) + (best.rating ?? 0) / 10,
+			inLanguage: hasLanguage(catalog, copies, language),
+			result: {
+				type: best.kind,
+				id: best.id,
+				name: best.name,
+				icon: best.image,
+				year: best.year ?? null,
+				languages
+			}
+		};
+	});
 	scored.sort((a, b) => b.score - a.score);
-	const seen = new Set<string>();
-	return scored
-		.map((s) => s.item)
-		.filter((i) => {
-			// The same title listed under several categories shows once
-			const key = `${i.kind}:${i.id}`;
-			if (seen.has(key)) return false;
-			seen.add(key);
-			return true;
-		});
+
+	const results = (inLanguage: boolean) =>
+		scored
+			.filter((s) => s.inLanguage === inLanguage)
+			.slice(0, MAX_TITLES)
+			.map((s) => s.result);
+	return { titles: results(true), otherLanguages: results(false) };
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -51,8 +79,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const q = url.searchParams.get('q')?.trim() ?? '';
 
 	let live: SearchItem[] = [];
-	let movies: SearchItem[] = [];
-	let series: SearchItem[] = [];
+	let titles: TitleResult[] = [];
+	let otherLanguages: TitleResult[] = [];
 	let loadError = '';
 	let partial = false;
 
@@ -65,19 +93,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		live = (liveResult ?? []).slice(0, MAX_PER_TYPE);
 		if (catalog) {
 			partial = !catalog.complete;
-			const hits = rank(catalog.items, needle);
-			const toItem = (i: CatalogItem): SearchItem => ({
-				type: i.kind,
-				id: i.id,
-				name: i.name,
-				icon: i.image,
-				...(i.ext ? { ext: i.ext } : {})
-			});
-			movies = hits.filter((i) => i.kind === 'movie').slice(0, MAX_PER_TYPE).map(toItem);
-			series = hits.filter((i) => i.kind === 'series').slice(0, MAX_PER_TYPE).map(toItem);
+			({ titles, otherLanguages } = search(catalog, needle, locals.user!.language));
 		}
 		if (!liveResult && !catalog) loadError = 'Search failed — the provider did not answer.';
 	}
 
-	return { connId: conn.id, q, live, movies, series, loadError, partial };
+	return { connId: conn.id, q, live, titles, otherLanguages, loadError, partial };
 };

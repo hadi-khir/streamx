@@ -4,6 +4,7 @@ import { hash, verify } from '@node-rs/argon2';
 import type { RequestEvent } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
+import { DEFAULT_LANGUAGE } from '$lib/languages';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 const SESSION_LIFETIME = 30 * DAY_MS;
@@ -11,7 +12,7 @@ const RENEW_THRESHOLD = 15 * DAY_MS;
 
 export const SESSION_COOKIE = 'session';
 
-export type SessionUser = { id: string; username: string; activeConnectionId: number | null };
+export type SessionUser = { id: string; username: string; activeConnectionId: number | null; language: string };
 export type SessionInfo = { id: string; userId: string; expiresAt: number };
 
 const ARGON2_OPTS = { memoryCost: 19456, timeCost: 2, outputLen: 32, parallelism: 1 };
@@ -42,7 +43,7 @@ export function validateSessionToken(token: string): {
 	const row = db
 		.select({
 			session: sessions,
-			user: { id: users.id, username: users.username, activeConnectionId: users.activeConnectionId }
+			user: { id: users.id, username: users.username, activeConnectionId: users.activeConnectionId, language: users.language }
 		})
 		.from(sessions)
 		.innerJoin(users, eq(sessions.userId, users.id))
@@ -88,7 +89,7 @@ export async function createUser(username: string, password: string): Promise<Se
 	const passwordHash = await hash(password, ARGON2_OPTS);
 	const user = { id: randomUUID(), username, passwordHash };
 	db.insert(users).values(user).run();
-	return { id: user.id, username, activeConnectionId: null };
+	return { id: user.id, username, activeConnectionId: null, language: DEFAULT_LANGUAGE };
 }
 
 export async function verifyLogin(
@@ -99,5 +100,5 @@ export async function verifyLogin(
 	if (!user) return null;
 	const valid = await verify(user.passwordHash, password);
 	if (!valid) return null;
-	return { id: user.id, username: user.username, activeConnectionId: user.activeConnectionId };
+	return { id: user.id, username: user.username, activeConnectionId: user.activeConnectionId, language: user.language };
 }

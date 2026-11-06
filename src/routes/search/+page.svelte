@@ -4,19 +4,14 @@
 
 	let { data } = $props();
 
-	const total = $derived(data.live.length + data.movies.length + data.series.length);
+	const total = $derived(data.live.length + data.titles.length + data.otherLanguages.length);
 	const searching = $derived(navigating.to?.url.pathname === '/search');
 
-	// Films and shows interleave in one results grid, best match first
-	const titles = $derived.by(() => {
-		const out = [];
-		const longest = Math.max(data.movies.length, data.series.length);
-		for (let i = 0; i < longest; i++) {
-			if (data.movies[i]) out.push(data.movies[i]);
-			if (data.series[i]) out.push(data.series[i]);
-		}
-		return out;
-	});
+	function subtitle(item: { year: number | null; languages: string[] }, showSingle: boolean): string {
+		const { languages, year } = item;
+		const spoken = languages.length > 1 ? `${languages.length} languages` : showSingle ? languages[0] : '';
+		return [year, spoken].filter(Boolean).join(' · ');
+	}
 
 	function liveUrl(item: { id: number; name: string; icon: string }): string {
 		const q = new URLSearchParams({ name: item.name, icon: item.icon ?? '', conn: String(data.connId) });
@@ -64,12 +59,23 @@
 	{/if}
 
 	<div class="transition-opacity {searching ? 'opacity-50' : ''}">
-		{#if titles.length}
+		{#if data.titles.length}
 			<section class="mt-4">
 				<h2 class="mb-3 text-xl text-zinc-100">Movies &amp; TV</h2>
 				<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
-					{#each titles as item (item.type + item.id)}
-						<MediaCard href="/{item.type === 'movie' ? 'movies' : 'series'}/{item.id}" image={item.icon} title={item.name} />
+					{#each data.titles as item (item.type + item.id)}
+						<MediaCard href="/{item.type === 'movie' ? 'movies' : 'series'}/{item.id}" image={item.icon} title={item.name} subtitle={subtitle(item, false)} />
+					{/each}
+				</div>
+			</section>
+		{/if}
+
+		{#if data.otherLanguages.length}
+			<section class="mt-10">
+				<h2 class="mb-3 text-xl text-zinc-100">In other languages</h2>
+				<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+					{#each data.otherLanguages as item (item.type + item.id)}
+						<MediaCard href="/{item.type === 'movie' ? 'movies' : 'series'}/{item.id}" image={item.icon} title={item.name} subtitle={subtitle(item, true)} />
 					{/each}
 				</div>
 			</section>

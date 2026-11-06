@@ -7,6 +7,8 @@ import { getSeriesInfo } from '$lib/server/xtream';
 import { lookup } from '$lib/server/tmdb';
 import { groupEpisodes, type SeriesEpisode } from '$lib/server/series';
 import { moreLikeThis } from '$lib/server/recommend';
+import { getCatalog } from '$lib/server/catalog';
+import { versionsOf } from '$lib/server/versions';
 import { episodeWatchUrl } from '$lib/episodes';
 import type { PageServerLoad } from './$types';
 
@@ -111,6 +113,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		name,
 		poster,
 		upNext,
+		versions: versionsOf(await getCatalog(conn), 'series', seriesId, user.language),
 		// Streamed: the page shouldn't wait on recommendations
 		similar: moreLikeThis(conn, user.id, 'series', seriesId, {
 			name,

@@ -5,6 +5,8 @@ export const users = sqliteTable('users', {
 	username: text('username').notNull().unique(),
 	passwordHash: text('password_hash').notNull(),
 	activeConnectionId: integer('active_connection_id'),
+	/** Which copy of a title to show first when a provider lists several */
+	language: text('language').notNull().default('en'),
 	createdAt: integer('created_at')
 		.notNull()
 		.$defaultFn(() => Date.now())

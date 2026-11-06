@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { displayName } from '$lib/titles';
+	import { LANGUAGES } from '$lib/languages';
 
 	let { data, form } = $props();
 	let testing = $state(false);
@@ -139,6 +140,24 @@
 			Xtream credentials are stored in plain text on the server — they are required to build
 			stream URLs. Run Vesper only on hardware you trust.
 		</p>
+	</section>
+
+	<section class="mt-10">
+		<h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-400 uppercase">Language</h2>
+		<p class="mt-2 text-sm text-zinc-500">When a title comes in several languages, search shows this one. You can switch on the title's page.</p>
+		<form method="POST" action="?/setLanguage" use:enhance={() => ({ update }) => update({ reset: false })} class="mt-3">
+			<select
+				name="language"
+				aria-label="Preferred language"
+				value={data.language}
+				onchange={(e) => e.currentTarget.form?.requestSubmit()}
+				class="rounded-xl border border-surface-700 bg-surface-900 px-4 py-2.5 text-sm text-zinc-200 outline-none focus:border-accent"
+			>
+				{#each Object.entries(LANGUAGES) as [code, label] (code)}
+					<option value={code}>{label}</option>
+				{/each}
+			</select>
+		</form>
 	</section>
 
 	<section class="mt-10">

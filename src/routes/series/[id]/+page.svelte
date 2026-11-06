@@ -7,6 +7,7 @@
 	import Billboard from '$lib/components/Billboard.svelte';
 	import MediaCard from '$lib/components/MediaCard.svelte';
 	import TitleCard from '$lib/components/TitleCard.svelte';
+	import VersionPicker from '$lib/components/VersionPicker.svelte';
 	import { displayName } from '$lib/titles';
 
 	let { data } = $props();
@@ -167,6 +168,7 @@
 			</svg>
 		</button>
 	{/if}
+	<VersionPicker versions={data.versions} current={data.seriesId} href={(id) => `/series/${id}?conn=${data.connId}`} />
 </Billboard>
 
 <div class="gutter relative z-10 mt-4 pb-20">

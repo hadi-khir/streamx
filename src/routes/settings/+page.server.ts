@@ -4,12 +4,14 @@ import { db } from '$lib/server/db';
 import { connections, hiddenTitles, users } from '$lib/server/db/schema';
 import { listConnections } from '$lib/server/connections';
 import { authenticate, validateServerUrl } from '$lib/server/xtream';
+import { LANGUAGES } from '$lib/languages';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = locals.user!;
 	return {
 		setup: url.searchParams.has('setup'),
+		language: user.language,
 		connections: listConnections(user.id).map((c) => ({
 			id: c.id,
 			name: c.name,
@@ -80,6 +82,14 @@ export const actions: Actions = {
 				.run();
 		}
 		return { success: 'Connection removed' };
+	},
+
+	setLanguage: async ({ locals, request }) => {
+		const form = await request.formData();
+		const language = String(form.get('language'));
+		if (!(language in LANGUAGES)) return fail(400, { error: 'Unknown language' });
+		db.update(users).set({ language }).where(eq(users.id, locals.user!.id)).run();
+		return { success: `Search now shows ${LANGUAGES[language]} first` };
 	},
 
 	restoreHidden: async ({ locals, request }) => {

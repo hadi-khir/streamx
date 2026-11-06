@@ -6,6 +6,8 @@ import { requireConnection } from '$lib/server/connections';
 import { getVodInfo } from '$lib/server/xtream';
 import { lookup } from '$lib/server/tmdb';
 import { moreLikeThis } from '$lib/server/recommend';
+import { getCatalog } from '$lib/server/catalog';
+import { versionsOf } from '$lib/server/versions';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url, locals }) => {
@@ -70,6 +72,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		durationSecs: info.duration_secs ? Number(info.duration_secs) : null,
 		progress: progress ?? null,
 		favorited,
+		versions: versionsOf(await getCatalog(conn), 'movie', streamId, user.language),
 		// Streamed: the page shouldn't wait on recommendations
 		similar: moreLikeThis(conn, user.id, 'movie', streamId, {
 			name,
