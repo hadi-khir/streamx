@@ -8,6 +8,8 @@ private let siteURL = URL(string: "https://iptv.khir.ca")!
 final class AppDelegate: NSObject, NSApplicationDelegate {
 	private var window: NSWindow!
 	private var webView: WKWebView!
+	private var launchView: LaunchView!
+	private var revealTimer: Timer?
 	private var downloads: [ObjectIdentifier: NSKeyValueObservation] = [:]
 
 	static func main() {
@@ -22,49 +24,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		config.preferences.isElementFullscreenEnabled = true
 		// Up-next autoplay and resume shouldn't wait on a click
 		config.mediaTypesRequiringUserActionForPlayback = []
+		config.userContentController.add(self, name: "painted")
+		config.userContentController.addUserScript(
+			WKUserScript(source: firstPaintScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+		)
 
-		webView = WKWebView(frame: .zero, configuration: config)
+		let frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
+		webView = WKWebView(frame: frame, configuration: config)
 		webView.navigationDelegate = self
 		webView.uiDelegate = self
 		webView.allowsBackForwardNavigationGestures = true
-		webView.underPageBackgroundColor = Self.background
+		webView.underPageBackgroundColor = inkBackground
+		webView.autoresizingMask = [.width, .height]
+
+		launchView = LaunchView(frame: frame)
+		launchView.autoresizingMask = [.width, .height]
+
+		let content = NSView(frame: frame)
+		content.addSubview(webView)
+		content.addSubview(launchView)
 
 		window = NSWindow(
-			contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800),
+			contentRect: frame,
 			styleMask: [.titled, .closable, .miniaturizable, .resizable],
 			backing: .buffered,
 			defer: false
 		)
-		window.title = "StreamX"
+		window.title = "Vesper"
 		window.appearance = NSAppearance(named: .darkAqua)
-		window.backgroundColor = Self.background
+		window.backgroundColor = inkBackground
+		window.titlebarAppearsTransparent = true
 		window.collectionBehavior.insert(.fullScreenPrimary)
 		window.tabbingMode = .disallowed
 		window.isReleasedWhenClosed = false
-		window.contentView = webView
+		window.contentView = content
 		window.center()
 		window.setFrameAutosaveName("Main")
 		window.makeKeyAndOrderFront(nil)
 
 		NSApp.mainMenu = buildMenu()
 		NSApp.activate(ignoringOtherApps: true)
+		showLaunchView()
 		webView.load(URLRequest(url: siteURL))
 	}
 
 	func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
-	private static let background = NSColor(red: 0.078, green: 0.078, blue: 0.078, alpha: 1)
+	// MARK: Launch
+
+	/** The web view paints white until the page's first frame, so it stays covered until then. */
+	private func showLaunchView() {
+		launchView.alphaValue = 1
+		launchView.isHidden = false
+		launchView.start()
+		revealTimer?.invalidate()
+		// A page that never reports in is still better seen than hidden
+		revealTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
+			MainActor.assumeIsolated { self?.revealPage() }
+		}
+	}
+
+	private func revealPage() {
+		revealTimer?.invalidate()
+		revealTimer = nil
+		guard !launchView.isHidden else { return }
+		NSAnimationContext.runAnimationGroup { context in
+			context.duration = 0.3
+			launchView.animator().alphaValue = 0
+		} completionHandler: { [launchView] in
+			MainActor.assumeIsolated {
+				launchView?.isHidden = true
+				launchView?.stop()
+			}
+		}
+	}
 
 	// MARK: Menu
 
 	private func buildMenu() -> NSMenu {
 		let main = NSMenu()
 
-		let app = submenu(of: main, "StreamX")
-		app.addItem(withTitle: "About StreamX", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+		let app = submenu(of: main, "Vesper")
+		app.addItem(withTitle: "About Vesper", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
 		app.addItem(.separator())
-		app.addItem(withTitle: "Hide StreamX", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-		app.addItem(withTitle: "Quit StreamX", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+		app.addItem(withTitle: "Hide Vesper", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+		app.addItem(withTitle: "Quit Vesper", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
 		// Without these items, ⌘C and ⌘V do nothing in the page's text fields
 		let edit = submenu(of: main, "Edit")
@@ -100,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	}
 
 	@objc private func reload() {
+		showLaunchView()
 		// After a failed load the current page is the error page, not the site
 		if webView.url?.host == siteURL.host { webView.reload() } else { webView.load(URLRequest(url: siteURL)) }
 	}
@@ -114,9 +159,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		if cancelled || becameDownload { return }
 		webView.loadHTMLString(
 			"""
-			<body style="background:#141414;color:#ccc;font:15px -apple-system;display:flex;height:90vh;align-items:center;justify-content:center;text-align:center">
-			<div><h2 style="color:#fff">Can't reach StreamX</h2><p>Check your connection, then
-			<a style="color:#e50914" href="\(siteURL.absoluteString)">try again</a>.</p></div></body>
+			<body style="background:#14110f;color:#cfc5b4;font:15px -apple-system;display:flex;height:90vh;align-items:center;justify-content:center;text-align:center">
+			<div><h2 style="color:#f3ede2;font:500 26px 'Iowan Old Style',Georgia,serif">Can't reach Vesper</h2><p>Check your connection, then
+			<a style="color:#d9a650" href="\(siteURL.absoluteString)">try again</a>.</p></div></body>
 			""",
 			baseURL: nil
 		)
@@ -166,7 +211,14 @@ extension AppDelegate: WKNavigationDelegate {
 	}
 
 	func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+		showLaunchView()
 		webView.reload()
+	}
+}
+
+extension AppDelegate: WKScriptMessageHandler {
+	func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+		revealPage()
 	}
 }
 

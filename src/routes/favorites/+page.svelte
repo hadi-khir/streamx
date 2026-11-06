@@ -26,28 +26,28 @@
 	}
 </script>
 
-<svelte:head><title>My List — StreamX</title></svelte:head>
+<svelte:head><title>Watchlist — Vesper</title></svelte:head>
 
 <div class="gutter pt-6 pb-20">
-	<h1 class="text-2xl font-bold sm:text-3xl">My List</h1>
+	<h1 class="text-2xl sm:text-3xl">Watchlist</h1>
 
 	{#if empty}
 		<div class="py-20 text-center">
-			<p class="text-lg text-zinc-300">You haven't added any titles to your list yet.</p>
+			<p class="text-lg text-zinc-300">Nothing saved yet.</p>
 			<p class="mt-2 text-sm text-zinc-500">Press <span class="font-semibold text-zinc-300">+</span> on a show, movie or channel to save it here.</p>
 		</div>
 	{/if}
 
 	{#if data.movies.length || data.series.length}
 		<section class="mt-6">
-			<div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+			<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
 				{#each [...data.series, ...data.movies].sort((a, b) => b.createdAt - a.createdAt) as fav (fav.id)}
 					<MediaCard
 						href="/{fav.streamType === 'movie' ? 'movies' : 'series'}/{fav.streamId}?conn={fav.connectionId}"
 						image={fav.icon}
 						title={fav.name}
 						onRemove={() => remove(fav)}
-						removeLabel="Remove from My List"
+						removeLabel="Remove from Watchlist"
 					/>
 				{/each}
 			</div>
@@ -56,7 +56,7 @@
 
 	{#if data.live.length}
 		<section class="mt-10">
-			<h2 class="mb-3 text-base font-semibold text-zinc-300">Channels</h2>
+			<h2 class="mb-3 text-xl text-zinc-100">Channels</h2>
 			<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
 				{#each data.live as fav (fav.id)}
 					<MediaCard
@@ -64,9 +64,8 @@
 						image={fav.icon}
 						title={fav.name}
 						landscape
-						placeholder="tv"
 						onRemove={() => remove(fav)}
-						removeLabel="Remove from My List"
+						removeLabel="Remove from Watchlist"
 					/>
 				{/each}
 			</div>

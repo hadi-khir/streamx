@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { tintFor } from '$lib/tint';
 
 	let {
 		title,
@@ -30,9 +31,10 @@
 </script>
 
 <section
-	class="relative w-full overflow-hidden bg-surface-950 {short
-		? 'h-[62vh] min-h-[420px] sm:h-[70vh]'
-		: 'h-[75vh] min-h-[480px] sm:h-[85vh] sm:max-h-[56.25vw] sm:min-h-[560px]'}"
+	class="relative w-full overflow-hidden {short
+		? 'h-[56vh] min-h-[400px] sm:h-[60vh]'
+		: 'h-[64vh] min-h-[440px] sm:h-[72vh] sm:max-h-[52vw] sm:min-h-[500px]'}"
+	style="background: {tintFor(title)}"
 >
 	{#if backdrop}
 		<img
@@ -46,38 +48,35 @@
 		<img
 			src={poster}
 			alt=""
-			class="absolute top-1/2 right-[8%] hidden h-[70%] -translate-y-1/2 rounded shadow-2xl shadow-black md:block"
+			class="absolute top-1/2 right-[8%] hidden h-[70%] -translate-y-1/2 rounded-md shadow-2xl shadow-black ring-1 ring-white/10 md:block"
 		/>
 	{/if}
-	<!-- Netflix's two vignettes: dark under the copy, fading into the rows below -->
-	<div class="absolute inset-0 bg-gradient-to-r from-black/85 via-black/35 to-transparent"></div>
-	<div class="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-surface-950 via-surface-950/60 to-transparent"></div>
-	<div class="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/60 to-transparent"></div>
+	<!-- Dark under the copy, settling into the page below -->
+	<div class="absolute inset-0 bg-gradient-to-r from-surface-950/90 via-surface-950/45 to-transparent"></div>
+	<div class="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-surface-950 via-surface-950/70 to-transparent"></div>
+	<div class="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-surface-950/70 to-transparent"></div>
 
-	<div class="gutter absolute inset-x-0 bottom-[14%] sm:bottom-[22%]">
+	<div class="gutter absolute inset-x-0 bottom-6 sm:bottom-10">
 		<div class="max-w-xl animate-fade-in lg:max-w-2xl">
 			{#if reason}
-				<p class="mb-2 flex items-center gap-2 text-xs font-bold tracking-[0.2em] text-zinc-200 uppercase sm:text-sm">
-					<span class="h-4 w-1 bg-accent"></span>
-					{reason}
-				</p>
+				<p class="mb-3 text-xs font-medium tracking-[0.18em] text-accent uppercase">{reason}</p>
 			{/if}
-			<h1 class="text-4xl leading-[0.95] font-black tracking-tight text-white drop-shadow-lg sm:text-6xl lg:text-7xl">
+			<h1 class="text-4xl leading-[1.05] text-white drop-shadow-lg sm:text-5xl lg:text-6xl">
 				{title}
 			</h1>
 			{#if meta.length || rating}
 				<div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-200 sm:text-base">
 					{#if rating}
-						<span class="font-semibold text-green-400">★ {rating.toFixed(1)}</span>
+						<span class="font-medium text-accent">★ {rating.toFixed(1)}</span>
 					{/if}
 					{#each meta as part, i (i)}
-						{#if i > 0 || rating}<span class="text-zinc-500">•</span>{/if}
+						{#if i > 0 || rating}<span class="text-zinc-500">·</span>{/if}
 						<span>{part}</span>
 					{/each}
 				</div>
 			{/if}
 			{#if overview}
-				<p class="mt-3 line-clamp-3 text-sm leading-relaxed text-zinc-200 drop-shadow sm:text-lg">{overview}</p>
+				<p class="mt-3 line-clamp-3 text-sm leading-relaxed text-zinc-200 drop-shadow sm:text-base">{overview}</p>
 			{/if}
 			{#if children}
 				<div class="mt-5 flex flex-wrap items-center gap-2 sm:gap-3">

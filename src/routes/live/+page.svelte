@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tintFor } from '$lib/tint';
+	import { displayName } from '$lib/titles';
 	import CategorySidebar from '$lib/components/CategorySidebar.svelte';
 	import CategorySelect from '$lib/components/CategorySelect.svelte';
 	import EpgNow from '$lib/components/EpgNow.svelte';
@@ -19,9 +21,11 @@
 		const q = new URLSearchParams({ name: c.name, icon: c.stream_icon ?? '', conn: String(data.connId) });
 		return `/watch/live/${c.stream_id}?${q}`;
 	}
+
+	let brokenLogos = $state(new Set<number>());
 </script>
 
-<svelte:head><title>Live TV — StreamX</title></svelte:head>
+<svelte:head><title>Live TV — Vesper</title></svelte:head>
 
 <div class="flex h-full">
 	<CategorySidebar
@@ -35,7 +39,7 @@
 
 	<div class="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
 		<div class="mb-4 flex items-center justify-between gap-3">
-			<h1 class="text-2xl font-bold sm:text-3xl">Live TV</h1>
+			<h1 class="text-2xl sm:text-3xl">Live TV</h1>
 			<CategorySelect
 				basePath="/live"
 				allLabel="All channels"
@@ -53,14 +57,14 @@
 				{#each shown as channel (channel.stream_id)}
 					<a
 						href={watchUrl(channel)}
-						class="flex items-center gap-3 rounded-xl border border-surface-800 bg-surface-900 p-3 transition-colors hover:border-surface-600"
+						class="flex items-center gap-3 rounded-lg border border-white/10 bg-surface-900 p-3 transition-colors hover:border-accent/60"
 					>
 						<div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-800">
-							{#if channel.stream_icon}
-								<img src={channel.stream_icon} alt="" loading="lazy" class="max-h-full max-w-full object-contain" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
-							{:else}
-								<svg class="h-5 w-5 text-zinc-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 20.25h12M12 17.25v3M3.375 17.25h17.25c.621 0 1.125-.504 1.125-1.125V4.875c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125Z" /></svg>
-							{/if}
+							{#if channel.stream_icon && !brokenLogos.has(channel.stream_id)}
+									<img src={channel.stream_icon} alt="" loading="lazy" class="max-h-full max-w-full object-contain" onerror={() => (brokenLogos = new Set(brokenLogos).add(channel.stream_id))} />
+								{:else}
+									<span class="flex h-full w-full items-center justify-center font-serif text-xl text-zinc-100" style="background: {tintFor(channel.name)}">{displayName(channel.name).slice(0, 1).toUpperCase()}</span>
+								{/if}
 						</div>
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-sm font-medium text-zinc-200">{channel.name}</p>

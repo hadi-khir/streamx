@@ -16,7 +16,7 @@
 	const shown = $derived(data.movies.slice(0, limit));
 </script>
 
-<svelte:head><title>Movies — StreamX</title></svelte:head>
+<svelte:head><title>Movies — Vesper</title></svelte:head>
 
 <div class="flex h-full">
 	<CategorySidebar
@@ -30,7 +30,7 @@
 
 	<div class="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
 		<div class="mb-4 flex items-center justify-between gap-3">
-			<h1 class="text-2xl font-bold sm:text-3xl">Movies</h1>
+			<h1 class="text-2xl sm:text-3xl">Movies</h1>
 			<CategorySelect
 				basePath="/movies"
 				allLabel="All movies"
@@ -44,7 +44,7 @@
 		{:else if data.movies.length === 0}
 			<p class="py-16 text-center text-sm text-zinc-500">No movies in this category.</p>
 		{:else}
-			<div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-7">
+			<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 xl:grid-cols-7">
 				{#each shown as movie (movie.stream_id)}
 					<MediaCard
 						href="/movies/{movie.stream_id}"

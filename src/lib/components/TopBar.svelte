@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import Wordmark from '$lib/components/Wordmark.svelte';
 
 	let {
 		user,
@@ -15,7 +16,7 @@
 		{ href: '/series', label: 'TV Shows' },
 		{ href: '/movies', label: 'Movies' },
 		{ href: '/live', label: 'Live TV' },
-		{ href: '/favorites', label: 'My List' }
+		{ href: '/favorites', label: 'Watchlist' }
 	];
 
 	const active = $derived((href: string) =>
@@ -60,7 +61,7 @@
 
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput() {
-		// Search as you type, like Netflix, without a request per keystroke
+		// Search as you type, without a request per keystroke
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(() => {
 			// Clicked away to a result meanwhile: don't yank them back to search
@@ -85,10 +86,10 @@
 
 <header
 	class="gutter fixed inset-x-0 top-0 z-40 flex h-16 items-center gap-4 transition-colors duration-500 lg:gap-10
-		{scrolled ? 'bg-surface-950 shadow-lg shadow-black/30' : 'bg-gradient-to-b from-black/80 to-transparent'}"
+		{scrolled ? 'bg-surface-950/90 shadow-[0_1px_0_rgb(255_255_255/0.1)] backdrop-blur-md' : 'bg-gradient-to-b from-surface-950/80 to-transparent'}"
 >
-	<a href="/" class="shrink-0 text-2xl font-black tracking-tighter text-accent uppercase sm:text-[1.7rem]" title="Home">
-		Stream<span class="text-white/90">X</span>
+	<a href="/" class="shrink-0" title="Home" aria-label="Vesper, home">
+		<Wordmark class="text-2xl sm:text-[1.65rem]" />
 	</a>
 
 	<!-- Desktop: the links inline -->
@@ -96,21 +97,21 @@
 		{#each links as link (link.href)}
 			<a
 				href={link.href}
-				class="text-sm transition-colors {active(link.href) ? 'font-semibold text-white' : 'text-zinc-300 hover:text-zinc-400'}"
+				class="border-b py-1 text-sm transition-colors {active(link.href) ? 'border-accent text-white' : 'border-transparent text-zinc-300 hover:text-white'}"
 			>
 				{link.label}
 			</a>
 		{/each}
 	</nav>
 
-	<!-- Mobile: a "Browse" menu, as on Netflix -->
+	<!-- Mobile: the links in a menu -->
 	<div class="relative md:hidden" data-menu>
 		<button onclick={() => (browseOpen = !browseOpen)} class="flex items-center gap-1 text-sm font-semibold text-white">
 			{current}
 			<svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z" /></svg>
 		</button>
 		{#if browseOpen}
-			<div class="absolute top-8 left-0 w-44 rounded border border-white/15 bg-black/95 py-2 shadow-xl">
+			<div class="absolute top-8 left-0 w-44 rounded-lg border border-white/10 bg-surface-900 py-2 shadow-xl">
 				{#each links as link (link.href)}
 					<a
 						href={link.href}
@@ -130,7 +131,7 @@
 		<form
 			action="/search"
 			data-search
-			class="flex items-center border transition-all duration-300 {searchOpen ? 'border-white/80 bg-black/80' : 'border-transparent'}"
+			class="flex items-center border transition-all duration-300 {searchOpen ? 'rounded-full border-white/30 bg-surface-950/80' : 'border-transparent'}"
 			onsubmit={(e) => {
 				clearTimeout(searchTimer);
 				if (!query.trim()) e.preventDefault();
@@ -164,13 +165,13 @@
 				class="flex items-center gap-1.5"
 				aria-label="Account menu"
 			>
-				<span class="flex h-8 w-8 items-center justify-center rounded bg-gradient-to-br from-sky-500 to-indigo-700 text-sm font-bold text-white uppercase">
+				<span class="flex h-8 w-8 items-center justify-center rounded-full border border-accent/60 font-serif text-sm text-accent uppercase">
 					{user.username.slice(0, 1)}
 				</span>
 				<svg class="h-3 w-3 text-white transition-transform {menuOpen ? 'rotate-180' : ''}" fill="currentColor" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z" /></svg>
 			</button>
 			{#if menuOpen}
-				<div class="absolute top-11 right-0 w-56 rounded border border-white/15 bg-black/95 py-2 text-sm shadow-xl">
+				<div class="absolute top-11 right-0 w-56 rounded-lg border border-white/10 bg-surface-900 py-2 text-sm shadow-xl">
 					<p class="truncate px-4 pt-1 pb-2 text-xs text-zinc-500">Signed in as <span class="text-zinc-300">{user.username}</span></p>
 					{#if connections.length > 1}
 						<p class="border-t border-white/10 px-4 pt-2 pb-1 text-xs text-zinc-500">Provider</p>
@@ -194,7 +195,7 @@
 							Report a bug or idea
 						</a>
 						<form method="POST" action="/logout">
-							<button class="w-full px-4 py-2 text-left text-zinc-300 hover:underline">Sign out of StreamX</button>
+							<button class="w-full px-4 py-2 text-left text-zinc-300 hover:underline">Sign out</button>
 						</form>
 					</div>
 				</div>

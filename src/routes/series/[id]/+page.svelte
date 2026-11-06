@@ -6,6 +6,7 @@
 	import { downloadUrl } from '$lib/download';
 	import Billboard from '$lib/components/Billboard.svelte';
 	import MediaCard from '$lib/components/MediaCard.svelte';
+	import TitleCard from '$lib/components/TitleCard.svelte';
 	import { displayName } from '$lib/titles';
 
 	let { data } = $props();
@@ -89,7 +90,7 @@
 	}
 </script>
 
-<svelte:head><title>{showName} — StreamX</title></svelte:head>
+<svelte:head><title>{showName} — Vesper</title></svelte:head>
 
 <Billboard
 	short
@@ -109,8 +110,8 @@
 	<button
 		onclick={toggleFavorite}
 		class="btn-round"
-		title={favorited ? 'Remove from My List' : 'Add to My List'}
-		aria-label={favorited ? 'Remove from My List' : 'Add to My List'}
+		title={favorited ? 'Remove from Watchlist' : 'Add to Watchlist'}
+		aria-label={favorited ? 'Remove from Watchlist' : 'Add to Watchlist'}
 	>
 		{#if favorited}
 			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
@@ -127,7 +128,7 @@
 	{/if}
 </Billboard>
 
-<div class="gutter relative z-10 -mt-[6vh] pb-20">
+<div class="gutter relative z-10 mt-4 pb-20">
 	{#if data.cast || data.genres.length}
 		<div class="mb-8 max-w-3xl space-y-1.5 text-sm">
 			{#if data.cast}
@@ -141,11 +142,11 @@
 
 	<div class="max-w-5xl">
 		<div class="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-			<h2 class="text-xl font-bold sm:text-2xl">Episodes</h2>
+			<h2 class="text-xl sm:text-2xl">Episodes</h2>
 			{#if data.seasons.length > 1}
 				<select
 					bind:value={selectedSeason}
-					class="rounded border border-zinc-500 bg-surface-900 px-3 py-2 text-sm font-semibold text-white outline-none sm:text-base"
+					class="rounded-lg border border-white/15 bg-surface-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
 					aria-label="Season"
 				>
 					{#each data.seasons as s (s.season)}
@@ -178,15 +179,19 @@
 						class="group/ep flex items-center gap-2 border-b border-white/10 sm:gap-4 {current ? 'bg-surface-800 shadow-[inset_3px_0_0_var(--color-accent)]' : ''}"
 					>
 						<a href={episodeUrl(ep)} class="flex min-w-0 flex-1 items-center gap-3 rounded px-1 py-4 transition-colors hover:bg-surface-800 sm:gap-5 sm:px-4">
-							<span class="hidden w-6 shrink-0 text-center text-2xl text-zinc-400 sm:block">{ep.num}</span>
+							<span class="hidden w-6 shrink-0 text-center font-serif text-2xl text-zinc-500 sm:block">{ep.num}</span>
 							<div class="relative aspect-video w-28 shrink-0 overflow-hidden rounded bg-surface-800 sm:w-36">
 								<FallbackImage
 									sources={[ep.image, tmdbFallback(ep.image), data.poster]}
 									imgClass="h-full w-full object-cover"
-								/>
+								>
+									{#snippet fallback()}
+										<TitleCard title="Episode {ep.num}" seed={data.name} landscape />
+									{/snippet}
+								</FallbackImage>
 								<span class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/ep:opacity-100">
-									<span class="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-black/50">
-										<svg class="ml-0.5 h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+									<span class="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-on-accent">
+										<svg class="ml-0.5 h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
 									</span>
 								</span>
 								{#if ep.progressPct > 0}
@@ -231,8 +236,8 @@
 
 	{#await data.similar then similar}
 		{#if similar.length}
-			<h2 class="mt-12 mb-3 text-xl font-bold sm:text-2xl">More Like This</h2>
-			<div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+			<h2 class="mt-12 mb-3 text-xl sm:text-2xl">More like this</h2>
+			<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
 				{#each similar as item (item.kind + item.id)}
 					<MediaCard
 						href={item.kind === 'movie' ? `/movies/${item.id}?conn=${data.connId}` : `/series/${item.id}?conn=${data.connId}`}

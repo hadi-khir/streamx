@@ -11,7 +11,7 @@
 
 	const prompt = $derived(
 		[
-			'Please work through these open StreamX reports in this repo. If one is unclear, ask instead of guessing.',
+			'Please work through these open Vesper reports in this repo. If one is unclear, ask instead of guessing.',
 			...open.map((r) =>
 				[
 					`#${r.id} [${label(r.kind)}] ${r.message}`,
@@ -40,7 +40,7 @@
 	}
 </script>
 
-<svelte:head><title>Bugs & ideas — StreamX</title></svelte:head>
+<svelte:head><title>Bugs & ideas — Vesper</title></svelte:head>
 
 {#snippet report(r: (typeof data.reports)[number])}
 	<div class="flex items-start gap-3 rounded-xl border border-surface-800 bg-surface-900 px-4 py-3">
@@ -67,7 +67,7 @@
 {/snippet}
 
 <div class="mx-auto max-w-3xl p-6">
-	<h1 class="text-2xl font-bold">Bugs & ideas</h1>
+	<h1 class="text-2xl">Bugs & ideas</h1>
 
 	{#if form?.error}
 		<div class="mt-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{form.error}</div>
@@ -107,14 +107,14 @@
 		{#if data.from}
 			<p class="truncate text-xs text-zinc-500">Reporting from {data.from}</p>
 		{/if}
-		<button class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover">
+		<button class="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover">
 			Save report
 		</button>
 	</form>
 
 	<section class="mt-10">
 		<div class="flex items-center justify-between gap-3">
-			<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Open ({open.length})</h2>
+			<h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-400 uppercase">Open ({open.length})</h2>
 			{#if open.length > 0}
 				<button
 					onclick={copyForClaude}
@@ -146,7 +146,7 @@
 
 	{#if done.length > 0}
 		<section class="mt-10">
-			<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Done ({done.length})</h2>
+			<h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-400 uppercase">Done ({done.length})</h2>
 			<div class="mt-3 space-y-2">
 				{#each done as r (r.id)}
 					{@render report(r)}

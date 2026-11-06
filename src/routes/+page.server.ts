@@ -454,7 +454,7 @@ async function personalRows(ctx: Promise<Personal | null>): Promise<Row[]> {
 	};
 
 	const picks = fresh(topPicks(catalog, taste, 24), 6);
-	if (picks) rows.push({ title: 'Top Picks for You', items: picks });
+	if (picks) rows.push({ title: 'Picked for you', items: picks });
 
 	// The latest few distinct shows and films you've watched seed a row each
 	const seeds = taste.anchors.slice(0, 3);
@@ -467,7 +467,7 @@ async function personalRows(ctx: Promise<Personal | null>): Promise<Row[]> {
 	const genre = genreRow(catalog, taste, shown, 24);
 	if (genre) {
 		const items = fresh(genre.picks, 6);
-		if (items) rows.push({ title: `${genreTitle(genre.genre)} for You`, items });
+		if (items) rows.push({ title: `${genreTitle(genre.genre)} for you`, items });
 	}
 	return rows;
 }
@@ -498,7 +498,7 @@ async function hero(
 	}
 	(await trendingItems).slice(0, 5).forEach((pick, i) => candidates.push({ pick, reason: `#${i + 1} trending this week` }));
 	for (const s of (await shows).slice(0, 3)) {
-		candidates.push({ pick: { kind: 'series', id: s.id, name: s.name, image: s.image, rating: s.rating }, reason: 'Popular on StreamX' });
+		candidates.push({ pick: { kind: 'series', id: s.id, name: s.name, image: s.image, rating: s.rating }, reason: 'Popular on Vesper' });
 	}
 
 	// The first candidate with real artwork wins; a poster stretched to a

@@ -3,7 +3,6 @@
 	import MediaCard from '$lib/components/MediaCard.svelte';
 	import MediaRow from '$lib/components/MediaRow.svelte';
 	import Billboard from '$lib/components/Billboard.svelte';
-	import { page } from '$app/state';
 	import type { Favorite } from '$lib/server/db/schema';
 
 	let { data } = $props();
@@ -79,7 +78,7 @@
 	const wide = 'w-44 shrink-0 snap-start sm:w-56 xl:w-64';
 </script>
 
-<svelte:head><title>Home — StreamX</title></svelte:head>
+<svelte:head><title>Home — Vesper</title></svelte:head>
 
 {#snippet pickRow(title: string, items: Pick[], href = '')}
 	{#if items.length}
@@ -93,29 +92,20 @@
 	{/if}
 {/snippet}
 
-{#snippet top10(items: Pick[])}
+{#snippet ranked(items: Pick[])}
 	{#if items.length >= 5}
-		<MediaRow title="Top 10 This Week">
+		<MediaRow title="Most watched this week">
 			{#each items.slice(0, 10) as item, i (item.kind + item.id)}
-				<a
-					href={pickUrl(item)}
-					class="group/top relative flex shrink-0 snap-start items-end {i === 9 ? 'w-48 sm:w-64' : 'w-40 sm:w-52'}"
-					aria-label="#{i + 1} {item.name}"
-				>
-					<span class="rank-numeral -mr-5 text-[8.5rem] select-none sm:-mr-7 sm:text-[11rem]" aria-hidden="true">{i + 1}</span>
-					<div class="relative w-24 shrink-0 overflow-hidden rounded shadow-lg transition duration-300 group-hover/top:scale-[1.06] sm:w-32">
-						<div class="aspect-[2/3] bg-surface-800">
-							<img src={item.image} alt="" loading="lazy" class="h-full w-full object-cover" />
-						</div>
-					</div>
-				</a>
+				<div class={poster}>
+					<MediaCard href={pickUrl(item)} image={item.image} title={item.name} rank={i + 1} />
+				</div>
 			{/each}
 		</MediaRow>
 	{/if}
 {/snippet}
 
 {#snippet recentsRow(art: Record<number, string>)}
-	<MediaRow title="Continue Watching for {page.data.user?.username ?? 'you'}">
+	<MediaRow title="Continue watching">
 		{#each data.recents as entry (entry.kind + entry.id)}
 			<div class={entry.kind === 'live' ? wide : poster}>
 				<MediaCard
@@ -125,9 +115,8 @@
 					subtitle={entry.subtitle}
 					progress={entry.progress}
 					landscape={entry.kind === 'live'}
-					placeholder={entry.kind === 'live' ? 'tv' : 'video'}
 					onRemove={() => removeRecent(entry)}
-					removeLabel="Remove from Continue Watching"
+					removeLabel="Remove from Continue watching"
 				/>
 			</div>
 		{/each}
@@ -138,20 +127,20 @@
 	<MediaRow {title}>
 		{#each Array.from({ length: 8 }) as _, i (i)}
 			<div class={isWide ? wide : poster}>
-				<div class="{isWide ? 'aspect-video' : 'aspect-[2/3]'} animate-pulse rounded bg-surface-900"></div>
+				<div class="{isWide ? 'aspect-video' : 'aspect-[2/3]'} animate-pulse rounded-md bg-surface-900"></div>
 			</div>
 		{/each}
 	</MediaRow>
 {/snippet}
 
 {#if !data.hasConnection}
-	<div class="gutter flex min-h-dvh items-center justify-center bg-gradient-to-b from-black to-surface-950">
+	<div class="gutter flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_top,_#2c2316_0%,_transparent_60%)]">
 		<div class="max-w-lg text-center">
-			<h1 class="text-3xl font-black sm:text-5xl">Unlimited TV, movies and more.</h1>
+			<h1 class="text-3xl sm:text-5xl">Your evening, all in one place.</h1>
 			<p class="mt-4 text-lg text-zinc-300">
 				Add your Xtream Codes provider to start watching live TV, movies and series.
 			</p>
-			<a href="/settings?setup=1" class="btn-play mt-8 !bg-accent !text-white hover:!bg-accent-hover">
+			<a href="/settings?setup=1" class="btn-play mt-8">
 				Add connection
 				<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
 			</a>
@@ -159,7 +148,7 @@
 	</div>
 {:else}
 	{#await data.hero}
-		<div class="h-[75vh] min-h-[480px] animate-pulse bg-gradient-to-b from-surface-900 to-surface-950 sm:h-[85vh] sm:max-h-[56.25vw] sm:min-h-[560px]"></div>
+		<div class="h-[64vh] min-h-[440px] animate-pulse bg-gradient-to-b from-surface-900 to-surface-950 sm:h-[72vh] sm:max-h-[52vw] sm:min-h-[500px]"></div>
 	{:then hero}
 		{#if hero}
 			<Billboard
@@ -184,8 +173,7 @@
 		{/if}
 	{/await}
 
-	<!-- Rows ride up over the billboard's fade, as on Netflix -->
-	<div class="relative z-10 -mt-[8vh] pb-20 sm:-mt-[12vh]">
+	<div class="relative z-10 mt-4 pb-20 sm:mt-6">
 		{#if data.recents.length}
 			{#await data.seriesArt}
 				{@render recentsRow({})}
@@ -195,23 +183,23 @@
 		{/if}
 
 		{#await data.personalRows}
-			{#if data.recents.length}{@render loadingRow('Top Picks for You')}{/if}
+			{#if data.recents.length}{@render loadingRow('Picked for you')}{/if}
 		{:then rows}
 			{#if rows[0]}{@render pickRow(rows[0].title, rows[0].items)}{/if}
-			{#await data.trending then items}{@render top10(items)}{/await}
+			{#await data.trending then items}{@render ranked(items)}{/await}
 			{#each rows.slice(1, 3) as row (row.title)}
 				{@render pickRow(row.title, row.items)}
 			{/each}
 		{/await}
 
 		{#await data.popularShows}
-			{@render loadingRow('Popular TV Shows')}
+			{@render loadingRow('Popular shows')}
 		{:then shows}
-			{@render pickRow('Popular TV Shows', shows.map((s) => ({ ...s, kind: 'series' as const })), '/series')}
+			{@render pickRow('Popular shows', shows.map((s) => ({ ...s, kind: 'series' as const })), '/series')}
 		{/await}
 
 		{#await data.newArrivals then items}
-			{@render pickRow('New Releases', items)}
+			{@render pickRow('New releases', items)}
 		{/await}
 
 		{#await data.personalRows then rows}
@@ -221,13 +209,13 @@
 		{/await}
 
 		{#await data.popularMovies}
-			{@render loadingRow('Popular Movies')}
+			{@render loadingRow('Popular movies')}
 		{:then movies}
-			{@render pickRow('Popular Movies', movies.map((m) => ({ ...m, kind: 'movie' as const })), '/movies')}
+			{@render pickRow('Popular movies', movies.map((m) => ({ ...m, kind: 'movie' as const })), '/movies')}
 		{/await}
 
 		{#if data.favorites.length}
-			<MediaRow title="My List" href="/favorites">
+			<MediaRow title="Your watchlist" href="/favorites">
 				{#each data.favorites as fav (fav.id)}
 					<div class={fav.streamType === 'live' ? wide : poster}>
 						<MediaCard
@@ -235,7 +223,6 @@
 							image={fav.icon}
 							title={fav.name}
 							landscape={fav.streamType === 'live'}
-							placeholder={fav.streamType === 'live' ? 'tv' : 'video'}
 						/>
 					</div>
 				{/each}
@@ -249,7 +236,7 @@
 				<MediaRow title="Live TV" href="/live">
 					{#each channels as channel (channel.id)}
 						<div class={wide}>
-							<MediaCard href={liveUrl(channel)} image={channel.image} title={channel.name} landscape placeholder="tv" />
+							<MediaCard href={liveUrl(channel)} image={channel.image} title={channel.name} landscape />
 						</div>
 					{/each}
 				</MediaRow>

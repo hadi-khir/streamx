@@ -65,7 +65,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 				}))
 			: [];
 
-	// Netflix's one button: resume the episode you're in the middle of, else
+	// The one button: resume the episode you're in the middle of, else
 	// the one after the last you finished, else the very first
 	const ordered = seasons.flatMap((s) => s.episodes);
 	let upNext: { episode: Episode; label: string; resume: boolean; started: boolean } | null = null;

@@ -1,15 +1,29 @@
 @import 'tailwindcss';
 
 @theme {
-	--color-accent: #e50914; /* Netflix red */
-	--color-accent-hover: #f6121d;
-	--color-surface-950: #141414;
-	--color-surface-900: #1f1f1f;
-	--color-surface-800: #2a2a2a;
-	--color-surface-700: #404040;
-	--color-surface-600: #5a5a5a;
+	/* Ink, ivory and brass */
+	--color-accent: #d9a650;
+	--color-accent-hover: #e6b866;
+	--color-on-accent: #1c1508;
+	--color-surface-950: #14110f;
+	--color-surface-900: #1d1916;
+	--color-surface-800: #292420;
+	--color-surface-700: #3d3630;
+	--color-surface-600: #5a5048;
 
-	--font-sans: 'Helvetica Neue', Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+	/* Warm the neutrals used across every page, so nothing reads as cold grey */
+	--color-zinc-100: #f3ede2;
+	--color-zinc-200: #e5dccd;
+	--color-zinc-300: #cfc5b4;
+	--color-zinc-400: #a79c8b;
+	--color-zinc-500: #847a6b;
+	--color-zinc-600: #5f574b;
+	--color-zinc-700: #443e35;
+	--color-zinc-800: #2e2a24;
+	--color-zinc-900: #1e1b17;
+
+	--font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+	--font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
 
 	--animate-ping-once: ping-once 0.5s ease-out forwards;
 	@keyframes ping-once {
@@ -35,9 +49,17 @@
 
 html {
 	background-color: var(--color-surface-950);
-	color: #f5f5f1;
+	color: #f2ebdd;
 	color-scheme: dark;
 	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+	font-family: var(--font-serif);
+	font-weight: 500;
+	letter-spacing: -0.01em;
 }
 
 * {
@@ -45,22 +67,12 @@ html {
 	scrollbar-color: var(--color-surface-700) transparent;
 }
 
-/* Netflix-style rows scroll horizontally; a visible bar under every row is noise */
+/* Rows scroll horizontally; a visible bar under every row is noise */
 @utility no-scrollbar {
 	scrollbar-width: none;
 	&::-webkit-scrollbar {
 		display: none;
 	}
-}
-
-/* The outlined numerals of a Top 10 row */
-@utility rank-numeral {
-	color: var(--color-surface-950);
-	-webkit-text-stroke: 3px #595959;
-	paint-order: stroke fill;
-	font-weight: 900;
-	letter-spacing: -0.08em;
-	line-height: 0.8;
 }
 
 /* Content gutter shared by the bar, the billboard and the rows */
@@ -74,14 +86,14 @@ html {
 	}
 }
 
-/* Netflix's two button styles: white Play, translucent grey everything else */
+/* The one filled action on a page, and quieter ones beside it */
 @utility btn-play {
-	@apply inline-flex items-center justify-center gap-2 rounded bg-white px-5 py-2 text-sm font-bold text-black transition-colors hover:bg-white/75 sm:px-7 sm:py-2.5 sm:text-lg;
+	@apply inline-flex items-center justify-center gap-2 rounded-full bg-accent px-6 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover sm:px-8 sm:py-2.5 sm:text-base;
 }
 @utility btn-secondary {
-	@apply inline-flex items-center justify-center gap-2 rounded bg-zinc-500/50 px-5 py-2 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:bg-zinc-500/35 sm:px-7 sm:py-2.5 sm:text-lg;
+	@apply inline-flex items-center justify-center gap-2 rounded-full border border-white/25 bg-black/25 px-6 py-2 text-sm font-medium text-zinc-100 backdrop-blur-sm transition-colors hover:border-white/60 sm:px-8 sm:py-2.5 sm:text-base;
 }
-/* Round outlined icon button (My List, download) */
+/* Round icon button (watchlist, download) */
 @utility btn-round {
-	@apply inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-400/80 bg-black/40 text-white transition-colors hover:border-white sm:h-11 sm:w-11;
+	@apply inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/25 text-zinc-100 backdrop-blur-sm transition-colors hover:border-white/60 sm:h-11 sm:w-11;
 }

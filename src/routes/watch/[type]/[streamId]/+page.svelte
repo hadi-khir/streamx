@@ -114,7 +114,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.name} — StreamX</title></svelte:head>
+<svelte:head><title>{data.name} — Vesper</title></svelte:head>
 
 {#snippet actions()}
 	<a
@@ -156,8 +156,8 @@
 		<button
 			onclick={toggleFavorite}
 			class="rounded-full p-2 transition-colors {favorited ? 'text-accent' : 'text-white hover:text-zinc-300'}"
-			title={favorited ? 'Remove from My List' : 'Add to My List'}
-			aria-label={favorited ? 'Remove from My List' : 'Add to My List'}
+			title={favorited ? 'Remove from Watchlist' : 'Add to Watchlist'}
+			aria-label={favorited ? 'Remove from Watchlist' : 'Add to Watchlist'}
 		>
 			{#if favorited}
 				<svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
@@ -188,7 +188,7 @@
 	{#if guideOpen && data.type === 'live'}
 		<aside class="absolute inset-y-0 right-0 z-10 flex w-full max-w-sm flex-col bg-zinc-950/95 shadow-2xl backdrop-blur">
 			<div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
-				<h3 class="text-base font-semibold text-white">Program guide</h3>
+				<h3 class="text-base text-white">Program guide</h3>
 				<button onclick={() => (guideOpen = false)} class="rounded-full p-1 text-zinc-400 hover:text-white" aria-label="Close guide">
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
 				</button>
@@ -199,7 +199,7 @@
 						<div class="flex items-center gap-2 text-xs text-zinc-500 tabular-nums">
 							{fmtTime(item.start)} – {fmtTime(item.end)}
 							{#if item.now}
-								<span class="rounded-sm bg-accent px-1.5 py-px text-[10px] font-bold text-white">NOW</span>
+								<span class="rounded-sm bg-accent px-1.5 py-px text-[10px] font-bold text-on-accent">NOW</span>
 							{/if}
 						</div>
 						<p class="mt-1 text-sm {item.now ? 'font-semibold text-white' : 'text-zinc-300'}">{item.title}</p>

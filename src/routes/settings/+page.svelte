@@ -5,10 +5,10 @@
 	let testing = $state(false);
 </script>
 
-<svelte:head><title>Settings — StreamX</title></svelte:head>
+<svelte:head><title>Settings — Vesper</title></svelte:head>
 
 <div class="mx-auto max-w-3xl p-6">
-	<h1 class="text-2xl font-bold">Settings</h1>
+	<h1 class="text-2xl">Settings</h1>
 
 	{#if data.setup}
 		<div class="mt-4 rounded-xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-zinc-200">
@@ -25,7 +25,7 @@
 	{/if}
 
 	<section class="mt-8">
-		<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Connections</h2>
+		<h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-400 uppercase">Connections</h2>
 		<div class="mt-3 space-y-2">
 			{#each data.connections as conn (conn.id)}
 				<div
@@ -75,7 +75,7 @@
 	</section>
 
 	<section class="mt-10">
-		<h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">Add connection</h2>
+		<h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-400 uppercase">Add connection</h2>
 		<form
 			method="POST"
 			action="?/add"
@@ -128,7 +128,7 @@
 			<div class="sm:col-span-2">
 				<button
 					disabled={testing}
-					class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+					class="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-50"
 				>
 					{testing ? 'Testing connection…' : 'Test & save'}
 				</button>
@@ -136,7 +136,7 @@
 		</form>
 		<p class="mt-3 text-xs text-zinc-600">
 			Xtream credentials are stored in plain text on the server — they are required to build
-			stream URLs. Run StreamX only on hardware you trust.
+			stream URLs. Run Vesper only on hardware you trust.
 		</p>
 	</section>
 </div>

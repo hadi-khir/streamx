@@ -7,7 +7,7 @@
 	const total = $derived(data.live.length + data.movies.length + data.series.length);
 	const searching = $derived(navigating.to?.url.pathname === '/search');
 
-	// Films and shows interleave like Netflix's one results grid, best match first
+	// Films and shows interleave in one results grid, best match first
 	const titles = $derived.by(() => {
 		const out = [];
 		const longest = Math.max(data.movies.length, data.series.length);
@@ -24,7 +24,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.q ? `${data.q} — ` : ''}Search — StreamX</title></svelte:head>
+<svelte:head><title>{data.q ? `${data.q} — ` : ''}Search — Vesper</title></svelte:head>
 
 <div class="gutter pt-6 pb-20">
 	<!-- The bar's search box is small on phones; this one is the real thing there -->
@@ -37,7 +37,7 @@
 				name="q"
 				value={data.q}
 				placeholder="Search shows, movies, channels"
-				class="w-full rounded bg-surface-800 py-3 pr-4 pl-11 text-base text-white outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-white/40"
+				class="w-full rounded-full bg-surface-800 py-3 pr-4 pl-11 text-base text-white outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-accent/50"
 			/>
 		</div>
 	</form>
@@ -66,8 +66,8 @@
 	<div class="transition-opacity {searching ? 'opacity-50' : ''}">
 		{#if titles.length}
 			<section class="mt-4">
-				<h2 class="mb-3 text-base font-semibold text-zinc-300">Movies &amp; TV</h2>
-				<div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+				<h2 class="mb-3 text-xl text-zinc-100">Movies &amp; TV</h2>
+				<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
 					{#each titles as item (item.type + item.id)}
 						<MediaCard href="/{item.type === 'movie' ? 'movies' : 'series'}/{item.id}" image={item.icon} title={item.name} />
 					{/each}
@@ -77,10 +77,10 @@
 
 		{#if data.live.length}
 			<section class="mt-10">
-				<h2 class="mb-3 text-base font-semibold text-zinc-300">Live channels</h2>
+				<h2 class="mb-3 text-xl text-zinc-100">Live channels</h2>
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
 					{#each data.live as item (item.id)}
-						<MediaCard href={liveUrl(item)} image={item.icon} title={item.name} landscape placeholder="tv" />
+						<MediaCard href={liveUrl(item)} image={item.icon} title={item.name} landscape />
 					{/each}
 				</div>
 			</section>

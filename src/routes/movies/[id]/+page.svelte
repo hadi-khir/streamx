@@ -68,7 +68,7 @@
 	}
 </script>
 
-<svelte:head><title>{displayName(data.name)} — StreamX</title></svelte:head>
+<svelte:head><title>{displayName(data.name)} — Vesper</title></svelte:head>
 
 <Billboard
 	short
@@ -86,8 +86,8 @@
 	<button
 		onclick={toggleFavorite}
 		class="btn-round"
-		title={favorited ? 'Remove from My List' : 'Add to My List'}
-		aria-label={favorited ? 'Remove from My List' : 'Add to My List'}
+		title={favorited ? 'Remove from Watchlist' : 'Add to Watchlist'}
+		aria-label={favorited ? 'Remove from Watchlist' : 'Add to Watchlist'}
 	>
 		{#if favorited}
 			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
@@ -102,11 +102,11 @@
 	</a>
 </Billboard>
 
-<div class="gutter relative z-10 -mt-[6vh] pb-20">
+<div class="gutter relative z-10 mt-4 pb-20">
 	{#if resuming}
 		<div class="mb-6 flex max-w-md items-center gap-3">
-			<div class="h-1 flex-1 bg-zinc-700">
-				<div class="h-full bg-accent" style="width: {resumePct}%"></div>
+			<div class="h-[3px] flex-1 rounded-full bg-zinc-700">
+				<div class="h-full rounded-full bg-accent" style="width: {resumePct}%"></div>
 			</div>
 			<span class="text-xs text-zinc-400">{Math.round(100 - resumePct)}% left</span>
 		</div>
@@ -128,8 +128,8 @@
 
 	{#await data.similar then similar}
 		{#if similar.length}
-			<h2 class="mt-10 mb-3 text-xl font-bold sm:text-2xl">More Like This</h2>
-			<div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+			<h2 class="mt-10 mb-3 text-xl sm:text-2xl">More like this</h2>
+			<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
 				{#each similar as item (item.kind + item.id)}
 					<MediaCard
 						href={item.kind === 'movie' ? `/movies/${item.id}?conn=${data.connId}` : `/series/${item.id}?conn=${data.connId}`}

@@ -955,7 +955,7 @@
 		</div>
 	{/if}
 
-	<!-- Netflix-style flash of what a click or key just did -->
+	<!-- A brief flash of what a click or key just did -->
 	{#if flash}
 		<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
 			<div class="animate-ping-once flex h-20 w-20 items-center justify-center rounded-full bg-black/50 text-white">

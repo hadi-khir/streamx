@@ -1,4 +1,4 @@
-# StreamX
+# Vesper
 
 A self-hosted IPTV player for Xtream Codes providers, rebuilt on a modern stack.
 Successor to [iptv-player](https://github.com/hadi-khir/iptv-player).
@@ -39,8 +39,8 @@ system's WebKit. Build it with the Xcode command line tools:
 desktop/build.sh
 ```
 
-This produces `desktop/dist/StreamX.dmg`. The site address is set at the top of
-`desktop/StreamX.swift`. The build is ad-hoc signed, so another Mac will need it signed with a
+This produces `desktop/dist/Vesper.dmg`. The site address is set at the top of
+`desktop/Vesper.swift`. The build is ad-hoc signed, so another Mac will need it signed with a
 Developer ID, or will ask you to approve it in System Settings.
 
 ## Docker
@@ -64,7 +64,7 @@ public URL (e.g. `https://tv.example.com`) and optionally `TMDB_API_KEY` — see
 ## Notes
 
 - Xtream provider credentials are stored **in plain text** in the SQLite database — they are
-  needed to construct upstream stream URLs. Host StreamX only on hardware you trust.
+  needed to construct upstream stream URLs. Host Vesper only on hardware you trust.
 - Registration is open by default. If you expose the app publicly, put it behind a reverse
   proxy with auth or firewall it.
 - Database migrations run automatically at startup (`drizzle/`).
