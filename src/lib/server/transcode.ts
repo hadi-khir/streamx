@@ -103,7 +103,9 @@ export function transcodeAudio(
 		'-reconnect', '1',
 		'-reconnect_delay_max', '5',
 		...(opts.live ? ['-reconnect_streamed', '1'] : []),
-		...(opts.start > 0 && !opts.live ? ['-ss', String(opts.start)] : []),
+		// Copied video has to start on the keyframe before `start`. Left accurate, the
+		// audio is cut at `start` and its first frame stretched to cover the difference.
+		...(opts.start > 0 && !opts.live ? ['-noaccurate_seek', '-ss', String(opts.start)] : []),
 		'-i', source,
 		'-map', '0:v:0',
 		'-map', `0:a:${opts.audioTrack}?`,
