@@ -33,6 +33,7 @@ import {
 	buildTaste,
 	genreRow,
 	newArrivals,
+	seedsFor,
 	similarTo,
 	topPicks,
 	trendingNow,
@@ -453,11 +454,11 @@ async function personalRows(ctx: Promise<Personal | null>): Promise<Row[]> {
 		return out;
 	};
 
-	const picks = fresh(topPicks(catalog, taste, 24), 6);
+	const picks = fresh(await topPicks(catalog, taste, 24), 6);
 	if (picks) rows.push({ title: 'Picked for you', items: picks });
 
-	// The latest few distinct shows and films you've watched seed a row each
-	const seeds = taste.anchors.slice(0, 3);
+	// A few of the titles you liked most seed a row each
+	const seeds = seedsFor(taste, 3);
 	const similar = await Promise.all(seeds.map((a) => similarTo(catalog, a.item, taste, 24).catch(() => [])));
 	seeds.forEach((seed, i) => {
 		const items = fresh(similar[i], 6);
@@ -494,7 +495,7 @@ async function hero(
 	const p = await ctx;
 	const candidates: { pick: Pick; reason: string }[] = [];
 	if (p?.taste.anchors.length) {
-		for (const pick of topPicks(p.catalog, p.taste, 5)) candidates.push({ pick, reason: 'Top pick for you' });
+		for (const pick of await topPicks(p.catalog, p.taste, 5)) candidates.push({ pick, reason: 'Top pick for you' });
 	}
 	(await trendingItems).slice(0, 5).forEach((pick, i) => candidates.push({ pick, reason: `#${i + 1} trending this week` }));
 	for (const s of (await shows).slice(0, 3)) {

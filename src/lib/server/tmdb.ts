@@ -88,7 +88,9 @@ export async function lookup(
 		const params: Record<string, string> = { query: title };
 		if (year) params[type === 'movie' ? 'year' : 'first_air_date_year'] = year;
 		const d = await tmdbFetch(`/search/${type}`, params);
-		const first = d?.results?.[0];
+		// Don't pin an outage for a day
+		if (!d) return null;
+		const first = d.results?.[0];
 		if (first) data = toInfo(first, type);
 	}
 
@@ -104,6 +106,9 @@ export interface TmdbTitle {
 	type: 'movie' | 'tv';
 	title: string;
 	year: string | null;
+	/** TMDB's audience score out of 10, and how many votes stand behind it */
+	rating: number;
+	votes: number;
 }
 
 const listCache = new Map<string, { data: TmdbTitle[]; time: number }>();
@@ -120,7 +125,13 @@ async function titleList(path: string, fallbackType: 'movie' | 'tv' | null): Pro
 			const title = type === 'movie' ? r.title : r.name;
 			if (!title) continue;
 			const date: string | undefined = type === 'movie' ? r.release_date : r.first_air_date;
-			data.push({ type, title, year: date?.slice(0, 4) || null });
+			data.push({
+				type,
+				title,
+				year: date?.slice(0, 4) || null,
+				rating: Number(r.vote_average) || 0,
+				votes: Number(r.vote_count) || 0
+			});
 		}
 	}
 	// Don't pin an outage for a day
