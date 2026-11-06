@@ -27,7 +27,7 @@
 		children?: Snippet;
 	} = $props();
 
-	let loaded = $state(false);
+	let loaded = $state<string | null>(null);
 </script>
 
 <section
@@ -37,12 +37,15 @@
 	style="background: {tintFor(title)}"
 >
 	{#if backdrop}
-		<img
-			src={backdrop}
-			alt=""
-			onload={() => (loaded = true)}
-			class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-700 {loaded ? 'opacity-100' : 'opacity-0'}"
-		/>
+		<!-- A new element per title, so one title's art never sits under the next one's name -->
+		{#key backdrop}
+			<img
+				src={backdrop}
+				alt=""
+				onload={() => (loaded = backdrop)}
+				class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-700 {loaded === backdrop ? 'opacity-100' : 'opacity-0'}"
+			/>
+		{/key}
 	{:else if poster}
 		<img src={poster} alt="" class="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
 		<img

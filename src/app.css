@@ -45,6 +45,28 @@
 			opacity: 1;
 		}
 	}
+	/* Never reaches the end: it disappears when the page arrives. The delay spares quick loads. */
+	--animate-page-load: page-load 8s cubic-bezier(0.1, 0.7, 0.2, 1) 150ms both;
+	@keyframes page-load {
+		from {
+			transform: scaleX(0);
+		}
+		to {
+			transform: scaleX(0.9);
+		}
+	}
+}
+
+/* Pages dissolve into each other, quickly enough not to feel like waiting */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 180ms;
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-old(root),
+	::view-transition-new(root) {
+		animation: none;
+	}
 }
 
 html {

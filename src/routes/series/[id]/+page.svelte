@@ -231,7 +231,6 @@
 				{#each season?.episodes ?? [] as ep (ep.id)}
 					{@const current = data.upNext?.started && data.upNext.episode.id === ep.id}
 					<li
-						{@attach current ? (el) => el.scrollIntoView({ block: 'nearest' }) : null}
 						aria-current={current ? 'true' : undefined}
 						class="group/ep flex items-center gap-2 border-b border-white/10 sm:gap-4 {current ? 'bg-surface-800 shadow-[inset_3px_0_0_var(--color-accent)]' : ''}"
 					>
