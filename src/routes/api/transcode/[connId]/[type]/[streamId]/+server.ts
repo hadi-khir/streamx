@@ -1,7 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { requireConnectionApi } from '$lib/server/connections';
 import { buildStreamUrl } from '$lib/server/xtream';
-import { probe, rememberFix, transcodeAudio } from '$lib/server/transcode';
+import { openFeed, probe, readFeed, releaseTranscode, rememberFix, transcodeAudio } from '$lib/server/transcode';
 import { yieldForPlayback } from '$lib/server/season-download';
 import type { RequestHandler } from './$types';
 
@@ -34,6 +34,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 	);
 
 	if (url.searchParams.get('probe') === '1') {
+		await releaseTranscode(conn.id);
 		try {
 			return json(await probe(source, `${conn.id}:${type}:${streamId}`));
 		} catch {
@@ -48,7 +49,24 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 		rememberFix(conn.id, type, streamId, url.searchParams.get('series'));
 	}
 
-	return new Response(transcodeAudio(conn.id, source, { start, live, audioTrack }), {
+	const stream = transcodeAudio(conn.id, source, { start, live, audioTrack });
+
+	// The player will ask for this in pieces (see openFeed)
+	if (url.searchParams.get('feed') === '1') {
+		const feed = openFeed(user.id, stream);
+		let piece: Uint8Array | null;
+		try {
+			piece = await readFeed(feed);
+		} catch {
+			error(502, 'Could not read the stream');
+		}
+		return new Response(piece as BodyInit | null, {
+			status: piece ? 200 : 204,
+			headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store', 'X-Stream-Feed': feed.id }
+		});
+	}
+
+	return new Response(stream, {
 		headers: {
 			'Content-Type': 'video/mp4',
 			'Cache-Control': 'no-store',

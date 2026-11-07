@@ -52,6 +52,7 @@
 	// Seconds of the fed re-encode to hold ahead of and behind the playhead
 	const FEED_AHEAD = 60;
 	const FEED_BEHIND = 30;
+	const FEED_PING = 25_000;
 
 	const VOLUME_KEY = 'streamx:volume';
 	const MUTED_KEY = 'streamx:muted';
@@ -71,6 +72,7 @@
 	let bar: HTMLDivElement | undefined = $state();
 	let hls: Hls | null = null;
 	let feed: AbortController | null = null;
+	let openFeedUrl: string | null = null;
 	let fixedVideoCodec: string | null = null;
 
 	let status = $state<'loading' | 'playing' | 'error'>('loading');
@@ -164,6 +166,11 @@
 		return typeof MediaSource !== 'undefined' && /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
 	}
 
+	/** However a stream ends, the provider connection must go. */
+	function closeFeed(url: string) {
+		fetch(url, { method: 'DELETE', keepalive: true }).catch(() => {});
+	}
+
 	function stopFeed() {
 		feed?.abort();
 		feed = null;
@@ -198,56 +205,75 @@
 	}
 
 	async function pumpFixed(source: MediaSource, url: string, signal: AbortSignal) {
-		const res = await fetch(url, { signal });
-		if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+		const separator = url.includes('?') ? '&' : '?';
+		let res = await fetch(`${url}${separator}feed=1`, { signal });
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const feedId = res.headers.get('X-Stream-Feed');
+		if (!feedId) throw new Error('No stream to read');
+		const feedUrl = `/api/transcode/feed/${feedId}`;
+		openFeedUrl = feedUrl;
 
-		// WebKit decodes what the stream's own header says; this only has to name the family
-		const codec = fixedVideoCodec === 'hevc' ? 'hvc1.2.4.L120.90' : 'avc1.640028';
-		const buffer = source.addSourceBuffer(`video/mp4; codecs="${codec},mp4a.40.2"`);
-		const settled = () =>
-			new Promise((resolve) => buffer.addEventListener('updateend', resolve, { once: true }));
-		const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+		// Plenty buffered or paused, the server still has to know someone's here
+		const ping = setInterval(() => {
+			fetch(feedUrl, { method: 'POST', signal }).catch(() => {});
+		}, FEED_PING);
 
-		const reader = res.body.getReader();
-		for (;;) {
-			const { value, done } = await reader.read();
-			if (signal.aborted) return;
-			if (done) {
-				source.endOfStream();
-				return;
-			}
+		try {
+			// WebKit decodes what the stream's own header says; this only has to name the family
+			const codec = fixedVideoCodec === 'hevc' ? 'hvc1.2.4.L120.90' : 'avc1.640028';
+			const buffer = source.addSourceBuffer(`video/mp4; codecs="${codec},mp4a.40.2"`);
+			const settled = () =>
+				new Promise((resolve) => buffer.addEventListener('updateend', resolve, { once: true }));
+			const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-			// Not reading is what slows ffmpeg, and with it the provider connection
-			while (
-				!signal.aborted &&
-				buffer.buffered.length &&
-				buffer.buffered.end(buffer.buffered.length - 1) - video.currentTime > FEED_AHEAD
-			) {
-				await pause(500);
-			}
-			if (signal.aborted) return;
-
-			if (buffer.buffered.length && video.currentTime - buffer.buffered.start(0) > FEED_BEHIND) {
-				buffer.remove(0, video.currentTime - FEED_BEHIND);
-				await settled();
-			}
 			for (;;) {
-				try {
-					buffer.appendBuffer(value);
-					break;
-				} catch (e) {
-					if ((e as DOMException).name !== 'QuotaExceededError') throw e;
-					// Full: wait for playback to free some of what's already been watched
-					await pause(1000);
-					if (signal.aborted) return;
-					const played = video.currentTime - 10;
-					if (buffer.buffered.length && played > buffer.buffered.start(0)) {
-						buffer.remove(0, played);
-						await settled();
+				// Status 204: the title has finished
+				if (res.status === 204) {
+					source.endOfStream();
+					return;
+				}
+				const piece = new Uint8Array(await res.arrayBuffer());
+				if (signal.aborted) return;
+
+				if (buffer.buffered.length && video.currentTime - buffer.buffered.start(0) > FEED_BEHIND) {
+					buffer.remove(0, video.currentTime - FEED_BEHIND);
+					await settled();
+				}
+				for (;;) {
+					try {
+						buffer.appendBuffer(piece);
+						break;
+					} catch (e) {
+						if ((e as DOMException).name !== 'QuotaExceededError') throw e;
+						// Full: wait for playback to free some of what's already been watched
+						await pause(1000);
+						if (signal.aborted) return;
+						const played = video.currentTime - 10;
+						if (buffer.buffered.length && played > buffer.buffered.start(0)) {
+							buffer.remove(0, played);
+							await settled();
+						}
 					}
 				}
+				await settled();
+
+				// Not asking is what slows ffmpeg, and with it the provider connection
+				while (
+					!signal.aborted &&
+					buffer.buffered.length &&
+					buffer.buffered.end(buffer.buffered.length - 1) - video.currentTime > FEED_AHEAD
+				) {
+					await pause(500);
+				}
+				if (signal.aborted) return;
+
+				res = await fetch(feedUrl, { signal });
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			}
-			await settled();
+		} finally {
+			clearInterval(ping);
+			if (openFeedUrl === feedUrl) openFeedUrl = null;
+			closeFeed(feedUrl);
 		}
 	}
 
@@ -836,7 +862,7 @@
 	);
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onpagehide={() => openFeedUrl && closeFeed(openFeedUrl)} />
 <svelte:document onfullscreenchange={() => (fullscreen = document.fullscreenElement != null)} />
 
 <div

@@ -1,7 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 
 const UA = 'StreamX/1.0';
 const PROBE_TIMEOUT = 20_000;
+// How long a provider takes to notice a dropped connection and allow a new one
+const RELEASE_WAIT = 1_500;
 
 /**
  * Audio a browser can't decode — AC-3, E-AC-3, DTS, TrueHD — is common in
@@ -81,6 +84,18 @@ export function knownToNeedFix(connId: number, type: string, streamId: number, s
 		needsFix.has(`${connId}:${type}:${streamId}`) ||
 		(seriesId != null && needsFix.has(`${connId}:show:${seriesId}`))
 	);
+}
+
+/**
+ * Playback is starting elsewhere on this login. A feed outlives a page that died
+ * without closing it (a reload, a crash), and would hold the provider's one
+ * connection until it timed out.
+ */
+export async function releaseTranscode(connId: number): Promise<void> {
+	const proc = running.get(connId);
+	if (!proc) return;
+	proc.kill('SIGKILL');
+	await new Promise((resolve) => setTimeout(resolve, RELEASE_WAIT));
 }
 
 /**
@@ -165,4 +180,106 @@ export function transcodeAudio(
 			proc.kill('SIGKILL');
 		}
 	}, { highWaterMark: 64 });
+}
+
+/**
+ * WebKit keeps downloading a fetch body whether or not the page is reading it,
+ * holding it all in memory, so a film at full copy speed takes the page down in
+ * minutes. There the stream is handed over in pieces instead: ffmpeg stays
+ * blocked on its pipe until the player asks for more, and a player that stops
+ * asking (and stops pinging) has its feed closed, which frees the provider login.
+ */
+const FEED_CHUNK_BYTES = 4 * 1024 * 1024;
+// A slow stream shouldn't sit on a part-filled piece, least of all when starting
+const FEED_CHUNK_WAIT = 1_000;
+const FEED_IDLE_AFTER = 120_000;
+
+interface Feed {
+	id: string;
+	userId: string;
+	reader: ReadableStreamDefaultReader<Uint8Array>;
+	/** A read outlasting one piece carries over to the next */
+	reading: Promise<ReadableStreamReadResult<Uint8Array>> | null;
+	ended: boolean;
+	idle: ReturnType<typeof setTimeout> | undefined;
+}
+
+const feeds = new Map<string, Feed>();
+
+export function closeFeed(feed: Feed) {
+	clearTimeout(feed.idle);
+	feeds.delete(feed.id);
+	// Ends ffmpeg
+	feed.reader.cancel().catch(() => {});
+}
+
+export function keepFeed(feed: Feed) {
+	clearTimeout(feed.idle);
+	feed.idle = setTimeout(() => closeFeed(feed), FEED_IDLE_AFTER);
+}
+
+export function openFeed(userId: string, stream: ReadableStream<Uint8Array>): Feed {
+	const feed: Feed = {
+		id: randomUUID(),
+		userId,
+		reader: stream.getReader(),
+		reading: null,
+		ended: false,
+		idle: undefined
+	};
+	feeds.set(feed.id, feed);
+	keepFeed(feed);
+	return feed;
+}
+
+export function findFeed(id: string, userId: string): Feed | null {
+	const feed = feeds.get(id);
+	return feed?.userId === userId ? feed : null;
+}
+
+/** The next piece of the stream, or null once it has finished cleanly. A failed stream throws. */
+export async function readFeed(feed: Feed): Promise<Uint8Array | null> {
+	keepFeed(feed);
+	const parts: Uint8Array[] = [];
+	let size = 0;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const waited = new Promise<null>((resolve) => {
+		timer = setTimeout(() => resolve(null), FEED_CHUNK_WAIT);
+	});
+	try {
+		while (!feed.ended && size < FEED_CHUNK_BYTES) {
+			feed.reading ??= feed.reader.read();
+			// Nothing yet means waiting for as long as ffmpeg needs; the piece isn't late until it has something
+			const result = size ? await Promise.race([feed.reading, waited]) : await feed.reading;
+			if (!result) break;
+			feed.reading = null;
+			if (result.done) feed.ended = true;
+			else {
+				parts.push(result.value);
+				size += result.value.length;
+			}
+		}
+	} catch (e) {
+		// Deliver what arrived first; the failed read is still there for the next request
+		if (!size) {
+			closeFeed(feed);
+			throw e;
+		}
+	} finally {
+		clearTimeout(timer);
+	}
+	// Closed while waiting isn't the title finishing, which would end playback for good
+	if (!feeds.has(feed.id)) throw new Error('The stream was closed');
+	keepFeed(feed);
+	if (!size) {
+		closeFeed(feed);
+		return null;
+	}
+	const piece = new Uint8Array(size);
+	let at = 0;
+	for (const part of parts) {
+		piece.set(part, at);
+		at += part.length;
+	}
+	return piece;
 }

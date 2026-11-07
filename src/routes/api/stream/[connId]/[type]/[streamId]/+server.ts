@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { requireConnectionApi } from '$lib/server/connections';
 import { buildStreamUrl } from '$lib/server/xtream';
 import { notePlayback, yieldForPlayback } from '$lib/server/season-download';
+import { releaseTranscode } from '$lib/server/transcode';
 import type { RequestHandler } from './$types';
 
 const UA = 'StreamX/1.0';
@@ -127,6 +128,7 @@ export const GET: RequestHandler = async ({ params, url, request, locals }) => {
 
 	// A season download sharing this login steps aside
 	await yieldForPlayback(conn.id);
+	if (!download) await releaseTranscode(conn.id);
 
 	// Main stream request
 	const streamUrl = buildStreamUrl(
