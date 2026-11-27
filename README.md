@@ -30,21 +30,45 @@ npm run dev
 Open http://localhost:5173, register an account, then add your Xtream Codes connection
 (server URL, username, password) under Settings.
 
-## Mac app
+## Desktop apps
 
-`desktop/` is a native Swift app that runs the whole of Streamer on your Mac: the site, the
-Node that serves it, and a window onto it using the system's WebKit. Nothing is hosted
-anywhere. Build it with the Xcode command line tools and npm:
+Download Streamer for Mac (Apple Silicon), Windows or Linux from
+[Releases](https://github.com/hadi-khir/streamx/releases). Each runs the whole of Streamer
+on your computer: the site, the Node that serves it, and a window onto it. Nothing is hosted
+anywhere; the app serves itself on `127.0.0.1` only. Titles with AC-3/DTS audio need ffmpeg
+installed to play with sound.
+
+Pushing a tag such as `v1.0.0` builds all three and publishes the release
+([.github/workflows/release.yml](.github/workflows/release.yml)).
+
+### Mac
+
+`desktop/` is a native Swift app that uses the system's WebKit. Build it with the Xcode
+command line tools and npm:
 
 ```bash
 desktop/build.sh
 ```
 
-This produces `desktop/dist/Streamer.dmg`. The app serves itself on `127.0.0.1` only, and keeps
-its database, catalog cache and log in `~/Library/Application Support/Streamer`; a `.env` file
-there can set `TMDB_API_KEY`. Re-encoding AC-3/DTS audio needs ffmpeg from Homebrew
-(`brew install ffmpeg`). The build is ad-hoc signed, so another Mac will need it signed with a
-Developer ID, or will ask you to approve it in System Settings.
+This produces `desktop/dist/Streamer.dmg`. The app keeps its database, catalog cache and log
+in `~/Library/Application Support/Streamer`; a `.env` file there can set `TMDB_API_KEY`.
+Re-encoding audio uses ffmpeg from Homebrew (`brew install ffmpeg`). The build is ad-hoc
+signed, so another Mac will need it signed with a Developer ID, or will ask you to approve it
+in System Settings.
+
+### Windows and Linux
+
+`desktop/electron/` is an Electron window around the same server. Build it on the system
+you're building for:
+
+```bash
+npm ci
+(cd desktop/electron && npm ci && npm run build)
+```
+
+This produces an installer (`Streamer-Setup-<version>.exe`) on Windows, and an AppImage and a
+`.deb` on Linux, in `desktop/dist`. Data lives in `%APPDATA%\Streamer` or `~/.config/Streamer`,
+where a `.env` file can set `TMDB_API_KEY`. ffmpeg must be on the `PATH`.
 
 ## Docker
 

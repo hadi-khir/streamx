@@ -1,0 +1,71 @@
+# Pushing a tag such as v1.0.0 builds the app for Mac, Windows and Linux and publishes
+# them together as a GitHub release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: plutil -replace CFBundleShortVersionString -string "${GITHUB_REF_NAME#v}" desktop/Info.plist
+      - run: desktop/build.sh
+      - run: mv desktop/dist/Streamer.dmg "desktop/dist/Streamer-${GITHUB_REF_NAME#v}-mac-arm64.dmg"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mac
+          path: desktop/dist/*.dmg
+
+  windows-linux:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/electron/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop/electron
+      - run: VERSION="${GITHUB_REF_NAME#v}" node desktop/electron/build.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.os }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+
+  release:
+    needs: [mac, windows-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" assets/* --title "Streamer ${GITHUB_REF_NAME#v}" --notes-file .github/release-notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

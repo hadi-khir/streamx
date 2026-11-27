@@ -31,3 +31,6 @@ vite.config.ts.timestamp-*
 # Desktop app
 /desktop/dist
 /desktop/.cache
+
+# Windows and Linux app
+/desktop/electron/stage

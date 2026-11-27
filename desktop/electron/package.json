@@ -1,0 +1,46 @@
+{
+	"name": "streamer",
+	"productName": "Streamer",
+	"version": "1.0.0",
+	"description": "A player for Xtream Codes IPTV providers",
+	"author": {
+		"name": "hadi-khir",
+		"email": "24902044+hadi-khir@users.noreply.github.com"
+	},
+	"homepage": "https://github.com/hadi-khir/streamx",
+	"private": true,
+	"main": "main.cjs",
+	"scripts": {
+		"build": "node build.mjs"
+	},
+	"devDependencies": {
+		"@resvg/resvg-js": "2.6.2",
+		"electron": "45.3.2",
+		"electron-builder": "26.18.0"
+	},
+	"build": {
+		"appId": "ca.khir.streamx",
+		"directories": {
+			"output": "../dist"
+		},
+		"files": [
+			"main.cjs"
+		],
+		"extraResources": [
+			{ "from": "stage", "to": ".", "filter": ["bin/**/*", "server/**/*", "icon.png"] }
+		],
+		"win": {
+			"target": "nsis",
+			"icon": "stage/icon.png"
+		},
+		"nsis": {
+			"artifactName": "Streamer-Setup-${version}.exe"
+		},
+		"linux": {
+			"target": ["AppImage", "deb"],
+			"icon": "stage/icon.png",
+			"category": "AudioVideo",
+			"synopsis": "A player for Xtream Codes IPTV providers"
+		}
+	}
+}
