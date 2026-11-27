@@ -30,3 +30,4 @@ vite.config.ts.timestamp-*
 
 # Desktop app
 /desktop/dist
+/desktop/.cache

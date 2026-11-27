@@ -7,13 +7,14 @@ import type { RequestHandler } from './$types';
 // ignores) keeps the response alive until the answer is ready
 const KEEP_ALIVE_EVERY = 15_000;
 
-/** Picks a login and measures the season, returning a link to download it from. */
+/** Picks a login and measures the season or series, returning a link to download it from. */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user!;
 	const body = await request.json().catch(() => null);
 	const seriesId = Number(body?.seriesId);
-	const season = String(body?.season ?? '');
-	if (!seriesId || !season) error(400, 'Invalid season');
+	// No season means the whole series
+	const season = body?.season == null ? null : String(body.season);
+	if (!seriesId || season === '') error(400, 'Invalid season');
 	const conn = requireConnectionApi(user, Number(body?.connectionId));
 
 	const encoder = new TextEncoder();

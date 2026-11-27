@@ -1,14 +1,35 @@
 #!/bin/sh
-# Builds dist/Vesper.app and dist/Vesper.dmg. Needs only the Xcode command line tools.
+# Builds dist/Vesper.app and dist/Vesper.dmg: the window, the site, and the Node that
+# runs it. Needs the Xcode command line tools and npm; ffmpeg comes from Homebrew at run time.
 set -eu
 
 cd "$(dirname "$0")"
 DIST=dist
 APP="$DIST/Vesper.app"
 WORK="$DIST/work"
+CACHE=.cache
+SERVER="$APP/Contents/Resources/server"
 
 rm -rf "$DIST"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$WORK/Vesper.iconset" "$WORK/dmg"
+mkdir -p "$APP/Contents/MacOS" "$SERVER" "$APP/Contents/Resources/bin" "$WORK/Vesper.iconset" "$WORK/dmg" "$CACHE"
+
+# The app carries its own Node, so a Homebrew upgrade can't break the database module
+case "$(uname -m)" in arm64) ARCH=arm64 ;; *) ARCH=x64 ;; esac
+SUMS=$(curl -fsS https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt)
+TARBALL=$(echo "$SUMS" | awk -v a="darwin-$ARCH.tar.gz" 'index($2, a) { print $2 }')
+[ -f "$CACHE/$TARBALL" ] || curl -fsS -o "$CACHE/$TARBALL" "https://nodejs.org/dist/latest-v22.x/$TARBALL"
+[ "$(shasum -a 256 "$CACHE/$TARBALL" | cut -d' ' -f1)" = "$(echo "$SUMS" | awk -v t="$TARBALL" '$2 == t { print $1 }')" ] \
+	|| { echo "Node download doesn't match its checksum" >&2; rm -f "$CACHE/$TARBALL"; exit 1; }
+tar -xzf "$CACHE/$TARBALL" -C "$WORK"
+NODE="$PWD/$WORK/${TARBALL%.tar.gz}/bin"
+cp "$NODE/node" "$APP/Contents/Resources/bin/node"
+
+# The site, with its native modules installed for that Node rather than the system's
+(cd .. && npm run build)
+cp -R ../build ../drizzle ../package.json ../package-lock.json "$SERVER/"
+cp server.mjs "$SERVER/main.mjs"
+(cd "$SERVER" && PATH="$NODE:$PATH" npm ci --omit=dev --no-audit --no-fund)
+rm -rf "$SERVER/.svelte-kit"
 
 swiftc -O -swift-version 5 -parse-as-library -target "$(uname -m)-apple-macos13" \
 	-o "$APP/Contents/MacOS/Vesper" Vesper.swift LaunchView.swift

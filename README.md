@@ -32,15 +32,18 @@ Open http://localhost:5173, register an account, then add your Xtream Codes conn
 
 ## Mac app
 
-`desktop/` is a native Swift app that opens the deployed site in its own window, using the
-system's WebKit. Build it with the Xcode command line tools:
+`desktop/` is a native Swift app that runs the whole of Vesper on your Mac: the site, the
+Node that serves it, and a window onto it using the system's WebKit. Nothing is hosted
+anywhere. Build it with the Xcode command line tools and npm:
 
 ```bash
 desktop/build.sh
 ```
 
-This produces `desktop/dist/Vesper.dmg`. The site address is set at the top of
-`desktop/Vesper.swift`. The build is ad-hoc signed, so another Mac will need it signed with a
+This produces `desktop/dist/Vesper.dmg`. The app serves itself on `127.0.0.1` only, and keeps
+its database, catalog cache and log in `~/Library/Application Support/Vesper`; a `.env` file
+there can set `TMDB_API_KEY`. Re-encoding AC-3/DTS audio needs ffmpeg from Homebrew
+(`brew install ffmpeg`). The build is ad-hoc signed, so another Mac will need it signed with a
 Developer ID, or will ask you to approve it in System Settings.
 
 ## Docker

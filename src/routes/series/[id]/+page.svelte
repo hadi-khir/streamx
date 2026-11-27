@@ -44,28 +44,33 @@
 		});
 	}
 
-	let seasonDownload = $state<{ busy: boolean; message: string; failed: boolean }>({ busy: false, message: '', failed: false });
+	let seasonDownload = $state<{ busy: 'season' | 'series' | null; message: string; failed: boolean }>({ busy: null, message: '', failed: false });
 
 	function bytes(n: number): string {
 		return n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`;
 	}
 
-	/** Measures the season on the server first, so the browser starts with a real size. */
-	async function downloadSeason() {
+	/** Measures the season (or every season) on the server first, so the browser starts with a real size. */
+	async function downloadSeason(whole = false) {
 		if (seasonDownload.busy) return;
-		seasonDownload = { busy: true, message: 'Getting the season ready…', failed: false };
+		const what = whole ? 'series' : 'season';
+		seasonDownload = {
+			busy: what,
+			message: whole ? 'Getting the series ready. A long show can take a few minutes…' : 'Getting the season ready…',
+			failed: false
+		};
 		const res = await fetch('/api/season-download', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ connectionId: data.connId, seriesId: data.seriesId, season: selectedSeason })
+			body: JSON.stringify({ connectionId: data.connId, seriesId: data.seriesId, season: whole ? null : selectedSeason })
 		}).catch(() => null);
 		const result = await res?.json().catch(() => null);
 		if (!result?.ok) {
 			const message =
 				result?.reason === 'busy'
 					? "Your provider's login is in use. Stop watching, or wait for the other download to finish, then try again."
-					: "Couldn't reach this season on the provider. Try again in a moment.";
-			seasonDownload = { busy: false, message, failed: true };
+					: `Couldn't reach this ${what} on the provider. Try again in a moment.`;
+			seasonDownload = { busy: null, message, failed: true };
 			return;
 		}
 		const link = document.createElement('a');
@@ -79,7 +84,7 @@
 			? ' It shares your login, so it pauses whenever you watch and then carries on.'
 			: ' It uses your other login, so you can keep watching.';
 		seasonDownload = {
-			busy: false,
+			busy: null,
 			message: `Downloading ${result.episodes} episode${result.episodes === 1 ? '' : 's'}, ${bytes(result.bytes)}.${missing}${sharing}`,
 			failed: false
 		};
@@ -168,6 +173,19 @@
 			</svg>
 		</button>
 	{/if}
+	{#if data.seasons.length > 1}
+		<button
+			onclick={() => downloadSeason(true)}
+			disabled={!!seasonDownload.busy}
+			class="btn-round disabled:opacity-50"
+			title="Download the whole series as one file"
+			aria-label="Download the whole series"
+		>
+			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+			</svg>
+		</button>
+	{/if}
 	<VersionPicker versions={data.versions} current={data.seriesId} href={(id) => `/series/${id}?conn=${data.connId}`} />
 </Billboard>
 
@@ -201,15 +219,15 @@
 			{/if}
 			{#if data.seasons.length}
 				<button
-					onclick={downloadSeason}
-					disabled={seasonDownload.busy}
+					onclick={() => downloadSeason()}
+					disabled={!!seasonDownload.busy}
 					class="ml-auto flex shrink-0 items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-sm text-zinc-200 transition-colors hover:border-accent hover:text-accent disabled:opacity-50 sm:ml-0"
 					title="Download every episode of this season as one file"
 				>
 					<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
 					</svg>
-					<span class="hidden sm:inline">{seasonDownload.busy ? 'Preparing…' : 'Download season'}</span>
+					<span class="hidden sm:inline">{seasonDownload.busy === 'season' ? 'Preparing…' : 'Download season'}</span>
 				</button>
 			{/if}
 		</div>

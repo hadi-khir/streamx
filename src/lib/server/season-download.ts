@@ -162,17 +162,19 @@ export type PrepareResult =
 	| { ok: false; reason: 'not-found' | 'busy' | 'unavailable' };
 
 /**
- * Picks a login and measures the season. Other logins come first so that watching
- * stays untouched; the one you're on is the fallback, and works just the same.
+ * Picks a login and measures the season, or every season when none is named. Other
+ * logins come first so that watching stays untouched; the one you're on is the
+ * fallback, and works just the same.
  */
 export async function prepareSeason(
 	userId: string,
 	conn: Connection,
 	seriesId: number,
-	season: string
+	season: string | null
 ): Promise<PrepareResult> {
 	const data = await getSeriesInfo(conn, seriesId);
-	const episodes = groupEpisodes(data).find((s) => s.season === season)?.episodes ?? [];
+	const seasons = groupEpisodes(data).filter((s) => season == null || s.season === season);
+	const episodes = seasons.flatMap((s) => s.episodes);
 	if (!episodes.length) return { ok: false, reason: 'not-found' };
 
 	const host = (c: Connection) => c.serverUrl.replace(/\/+$/, '').toLowerCase();
@@ -182,21 +184,19 @@ export async function prepareSeason(
 	if (!free.length) return { ok: false, reason: 'busy' };
 
 	const show = cleanPart(displayName(String(data.info?.name ?? ''))) || `Series ${seriesId}`;
-	const folder = `${clip(show, 120)}/Season ${clean(season)}`;
+	const folder = (ep: SeriesEpisode) => `${clip(show, 120)}/Season ${clean(ep.season)}`;
 
 	for (const login of free) {
 		const entries: Entry[] = [];
 		let skipped = 0;
-		let failed = false;
 		for (const episode of episodes) {
 			const size = await probeSize(login, episode);
-			if (size === 'missing') skipped++;
-			else if (size == null) {
-				failed = true;
-				break;
-			} else entries.push({ episode, size, path: `${folder}/${episodeFile(show, episode)}` });
+			if (typeof size === 'number') entries.push({ episode, size, path: `${folder(episode)}/${episodeFile(show, episode)}` });
+			else skipped++;
+			// Nothing but failures from the start is a login that's down, not a bad episode
+			if (size == null && !entries.length && skipped >= 3) break;
 		}
-		if (failed || !entries.length) continue;
+		if (!entries.length) continue;
 
 		const total = entries.reduce((sum, e) => sum + BLOCK + e.size + padFor(e.size), BLOCK * 2);
 		const token = randomBytes(16).toString('hex');
@@ -204,7 +204,7 @@ export async function prepareSeason(
 		prepared.set(token, {
 			userId,
 			conn: login,
-			filename: `${show} - Season ${clean(season)}.tar`,
+			filename: season == null ? `${show}.tar` : `${show} - Season ${clean(season)}.tar`,
 			entries,
 			total,
 			expires: Date.now() + PREPARED_FOR

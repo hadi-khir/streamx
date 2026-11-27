@@ -1,7 +1,10 @@
 import AppKit
 import WebKit
 
-private let siteURL = URL(string: "https://iptv.khir.ca")!
+// The site runs inside the app, on this machine only. The port is fixed so the
+// page's saved settings (kept per address) survive from one launch to the next.
+private let sitePort = 47831
+private let siteURL = URL(string: "http://127.0.0.1:\(sitePort)")!
 
 @main
 @MainActor
@@ -11,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	private var launchView: LaunchView!
 	private var revealTimer: Timer?
 	private var downloads: [ObjectIdentifier: NSKeyValueObservation] = [:]
+	private var server: Process?
+	private var serverInput: Pipe?
 
 	static func main() {
 		let app = NSApplication.shared
@@ -65,10 +70,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		NSApp.mainMenu = buildMenu()
 		NSApp.activate(ignoringOtherApps: true)
 		showLaunchView()
-		webView.load(URLRequest(url: siteURL))
+		startServer()
+		loadWhenServing()
 	}
 
 	func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+	func applicationWillTerminate(_ notification: Notification) {
+		server?.terminate()
+	}
+
+	// MARK: Server
+
+	/** Where the database, catalog cache, settings and log live. */
+	private var dataFolder: URL {
+		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Vesper")
+	}
+
+	private func startServer() {
+		guard server?.isRunning != true, let resources = Bundle.main.resourceURL else { return }
+		let data = dataFolder
+		try? FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+		let log = data.appendingPathComponent("server.log")
+		FileManager.default.createFile(atPath: log.path, contents: nil)
+
+		let process = Process()
+		process.executableURL = resources.appendingPathComponent("bin/node")
+		// Optional settings such as TMDB_API_KEY; what's set below wins over the file
+		process.arguments = ["--env-file-if-exists=\(data.appendingPathComponent(".env").path)", "main.mjs"]
+		process.currentDirectoryURL = resources.appendingPathComponent("server")
+		process.environment = [
+			"NODE_ENV": "production",
+			"HOST": "127.0.0.1",
+			"PORT": String(sitePort),
+			"ORIGIN": siteURL.absoluteString,
+			"DATABASE_URL": data.appendingPathComponent("vesper.db").path,
+			// An app launched from the Dock doesn't get the shell's PATH, and ffmpeg is Homebrew's
+			"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+			"HOME": NSHomeDirectory()
+		]
+		let input = Pipe()
+		process.standardInput = input
+		if let out = try? FileHandle(forWritingTo: log) {
+			process.standardOutput = out
+			process.standardError = out
+		}
+		do {
+			try process.run()
+			server = process
+			serverInput = input
+		} catch {
+			NSLog("Vesper's server didn't start: \(error)")
+		}
+	}
+
+	/** The server takes a moment to come up; the launch view covers the wait. */
+	private func loadWhenServing(attempt: Int = 0) {
+		var probe = URLRequest(url: siteURL.appendingPathComponent("login"))
+		probe.timeoutInterval = 2
+		URLSession.shared.dataTask(with: probe) { [weak self] _, response, _ in
+			DispatchQueue.main.async {
+				MainActor.assumeIsolated {
+					guard let self else { return }
+					if response != nil || attempt >= 100 || self.server?.isRunning != true {
+						self.webView.load(URLRequest(url: siteURL))
+					} else {
+						DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self.loadWhenServing(attempt: attempt + 1) }
+					}
+				}
+			}
+		}.resume()
+	}
 
 	// MARK: Launch
 
@@ -146,7 +218,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	@objc private func reload() {
 		showLaunchView()
 		// After a failed load the current page is the error page, not the site
-		if webView.url?.host == siteURL.host { webView.reload() } else { webView.load(URLRequest(url: siteURL)) }
+		if webView.url?.host == siteURL.host && server?.isRunning == true {
+			webView.reload()
+		} else {
+			startServer()
+			loadWhenServing()
+		}
 	}
 
 	@objc private func goBack() { webView.goBack() }
@@ -160,8 +237,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		webView.loadHTMLString(
 			"""
 			<body style="background:#14110f;color:#cfc5b4;font:15px -apple-system;display:flex;height:90vh;align-items:center;justify-content:center;text-align:center">
-			<div><h2 style="color:#f3ede2;font:500 26px 'Iowan Old Style',Georgia,serif">Can't reach Vesper</h2><p>Check your connection, then
-			<a style="color:#d9a650" href="\(siteURL.absoluteString)">try again</a>.</p></div></body>
+			<div><h2 style="color:#f3ede2;font:500 26px 'Iowan Old Style',Georgia,serif">Vesper didn't start</h2><p>Press ⌘R to try again.
+			If it keeps happening, the reason is in<br>~/Library/Application Support/Vesper/server.log</p></div></body>
 			""",
 			baseURL: nil
 		)
