@@ -19,7 +19,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.q ? `${data.q} — ` : ''}Search — Vesper</title></svelte:head>
+<svelte:head><title>{data.q ? `${data.q} — ` : ''}Search — Streamer</title></svelte:head>
 
 <div class="gutter pt-6 pb-20">
 	<!-- The bar's search box is small on phones; this one is the real thing there -->

@@ -25,7 +25,7 @@
 	let brokenLogos = $state(new Set<number>());
 </script>
 
-<svelte:head><title>Live TV — Vesper</title></svelte:head>
+<svelte:head><title>Live TV — Streamer</title></svelte:head>
 
 <div class="flex h-full">
 	<CategorySidebar

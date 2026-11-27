@@ -69,7 +69,7 @@
 	}
 </script>
 
-<svelte:head><title>{displayName(data.name)} — Vesper</title></svelte:head>
+<svelte:head><title>{displayName(data.name)} — Streamer</title></svelte:head>
 
 <Billboard
 	short

@@ -26,7 +26,7 @@
 	}
 </script>
 
-<svelte:head><title>Watchlist — Vesper</title></svelte:head>
+<svelte:head><title>Watchlist — Streamer</title></svelte:head>
 
 <div class="gutter pt-6 pb-20">
 	<h1 class="text-2xl sm:text-3xl">Watchlist</h1>

@@ -1,4 +1,4 @@
-# Vesper
+# Streamer
 
 A self-hosted IPTV player for Xtream Codes providers, rebuilt on a modern stack.
 Successor to [iptv-player](https://github.com/hadi-khir/iptv-player).
@@ -32,7 +32,7 @@ Open http://localhost:5173, register an account, then add your Xtream Codes conn
 
 ## Mac app
 
-`desktop/` is a native Swift app that runs the whole of Vesper on your Mac: the site, the
+`desktop/` is a native Swift app that runs the whole of Streamer on your Mac: the site, the
 Node that serves it, and a window onto it using the system's WebKit. Nothing is hosted
 anywhere. Build it with the Xcode command line tools and npm:
 
@@ -40,8 +40,8 @@ anywhere. Build it with the Xcode command line tools and npm:
 desktop/build.sh
 ```
 
-This produces `desktop/dist/Vesper.dmg`. The app serves itself on `127.0.0.1` only, and keeps
-its database, catalog cache and log in `~/Library/Application Support/Vesper`; a `.env` file
+This produces `desktop/dist/Streamer.dmg`. The app serves itself on `127.0.0.1` only, and keeps
+its database, catalog cache and log in `~/Library/Application Support/Streamer`; a `.env` file
 there can set `TMDB_API_KEY`. Re-encoding AC-3/DTS audio needs ffmpeg from Homebrew
 (`brew install ffmpeg`). The build is ad-hoc signed, so another Mac will need it signed with a
 Developer ID, or will ask you to approve it in System Settings.
@@ -67,7 +67,7 @@ public URL (e.g. `https://tv.example.com`) and optionally `TMDB_API_KEY` — see
 ## Notes
 
 - Xtream provider credentials are stored **in plain text** in the SQLite database — they are
-  needed to construct upstream stream URLs. Host Vesper only on hardware you trust.
+  needed to construct upstream stream URLs. Host Streamer only on hardware you trust.
 - Registration is open by default. If you expose the app publicly, put it behind a reverse
   proxy with auth or firewall it.
 - Database migrations run automatically at startup (`drizzle/`).

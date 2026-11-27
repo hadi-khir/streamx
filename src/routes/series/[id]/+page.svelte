@@ -137,7 +137,7 @@
 	}
 </script>
 
-<svelte:head><title>{showName} — Vesper</title></svelte:head>
+<svelte:head><title>{showName} — Streamer</title></svelte:head>
 
 <Billboard
 	short

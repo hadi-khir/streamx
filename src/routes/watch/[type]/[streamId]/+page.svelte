@@ -114,7 +114,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.name} — Vesper</title></svelte:head>
+<svelte:head><title>{data.name} — Streamer</title></svelte:head>
 
 {#snippet actions()}
 	<a

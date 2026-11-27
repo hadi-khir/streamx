@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 			backing: .buffered,
 			defer: false
 		)
-		window.title = "Vesper"
+		window.title = "Streamer"
 		window.appearance = NSAppearance(named: .darkAqua)
 		window.backgroundColor = inkBackground
 		window.titlebarAppearsTransparent = true
@@ -84,12 +84,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 	/** Where the database, catalog cache, settings and log live. */
 	private var dataFolder: URL {
-		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Vesper")
+		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Streamer")
 	}
 
 	private func startServer() {
 		guard server?.isRunning != true, let resources = Bundle.main.resourceURL else { return }
 		let data = dataFolder
+		// The app used to be called Vesper; its data moves across the first time.
+		// The database keeps its old file name.
+		if !FileManager.default.fileExists(atPath: data.path) {
+			try? FileManager.default.moveItem(at: data.deletingLastPathComponent().appendingPathComponent("Vesper"), to: data)
+		}
 		try? FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
 		let log = data.appendingPathComponent("server.log")
 		FileManager.default.createFile(atPath: log.path, contents: nil)
@@ -120,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 			server = process
 			serverInput = input
 		} catch {
-			NSLog("Vesper's server didn't start: \(error)")
+			NSLog("Streamer's server didn't start: \(error)")
 		}
 	}
 
@@ -176,11 +181,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	private func buildMenu() -> NSMenu {
 		let main = NSMenu()
 
-		let app = submenu(of: main, "Vesper")
-		app.addItem(withTitle: "About Vesper", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+		let app = submenu(of: main, "Streamer")
+		app.addItem(withTitle: "About Streamer", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
 		app.addItem(.separator())
-		app.addItem(withTitle: "Hide Vesper", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-		app.addItem(withTitle: "Quit Vesper", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+		app.addItem(withTitle: "Hide Streamer", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+		app.addItem(withTitle: "Quit Streamer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
 		// Without these items, ⌘C and ⌘V do nothing in the page's text fields
 		let edit = submenu(of: main, "Edit")
@@ -237,8 +242,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		webView.loadHTMLString(
 			"""
 			<body style="background:#14110f;color:#cfc5b4;font:15px -apple-system;display:flex;height:90vh;align-items:center;justify-content:center;text-align:center">
-			<div><h2 style="color:#f3ede2;font:500 26px 'Iowan Old Style',Georgia,serif">Vesper didn't start</h2><p>Press ⌘R to try again.
-			If it keeps happening, the reason is in<br>~/Library/Application Support/Vesper/server.log</p></div></body>
+			<div><h2 style="color:#f3ede2;font:500 26px 'Iowan Old Style',Georgia,serif">Streamer didn't start</h2><p>Press ⌘R to try again.
+			If it keeps happening, the reason is in<br>~/Library/Application Support/Streamer/server.log</p></div></body>
 			""",
 			baseURL: nil
 		)

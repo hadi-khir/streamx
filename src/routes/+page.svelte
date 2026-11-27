@@ -117,7 +117,7 @@
 	const wide = 'w-44 shrink-0 snap-start sm:w-56 xl:w-64';
 </script>
 
-<svelte:head><title>Home — Vesper</title></svelte:head>
+<svelte:head><title>Home — Streamer</title></svelte:head>
 
 {#snippet pickRow(title: string, items: Pick[], href = '')}
 	{#if shown(items).length}

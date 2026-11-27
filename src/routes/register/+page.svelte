@@ -6,10 +6,10 @@
 	let submitting = $state(false);
 </script>
 
-<svelte:head><title>Register — Vesper</title></svelte:head>
+<svelte:head><title>Register — Streamer</title></svelte:head>
 
 <div class="flex min-h-dvh flex-col items-center justify-center bg-surface-950 bg-[radial-gradient(ellipse_at_top,_#2c2316_0%,_transparent_60%)] p-4">
-	<a href="/" class="mb-8" aria-label="Vesper"><Wordmark class="text-4xl" /></a>
+	<a href="/" class="mb-8" aria-label="Streamer"><Wordmark class="text-4xl" /></a>
 	<div class="w-full max-w-sm rounded-xl border border-white/10 bg-surface-900/70 px-6 py-8 sm:px-8 sm:py-10">
 		<h1 class="mb-6 text-2xl text-zinc-100">Create your account</h1>
 

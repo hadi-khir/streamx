@@ -502,7 +502,7 @@ async function hero(
 	}
 	(await trendingItems).slice(0, 5).forEach((pick, i) => candidates.push({ pick, reason: `#${i + 1} trending this week` }));
 	for (const s of (await shows).slice(0, 3)) {
-		candidates.push({ pick: { kind: 'series', id: s.id, name: s.name, image: s.image, rating: s.rating }, reason: 'Popular on Vesper' });
+		candidates.push({ pick: { kind: 'series', id: s.id, name: s.name, image: s.image, rating: s.rating }, reason: 'Popular on Streamer' });
 	}
 
 	// The first candidate with real artwork wins; a poster stretched to a

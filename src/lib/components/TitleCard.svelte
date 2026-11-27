@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TvMark from '$lib/components/TvMark.svelte';
 	import { tintFor } from '$lib/tint';
 
 	let {
@@ -27,9 +28,7 @@
 <div class="@container relative h-full w-full" style="background: {tintFor(seed)}">
 	<div class="absolute inset-[5cqw] flex flex-col items-center justify-center border border-accent/30 px-[5cqw] py-[6cqw] text-center">
 		{#if !landscape}
-			<svg class="mb-[6cqw] h-[8cqw] w-[8cqw] text-accent/80" viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">
-				<path d="M32 2c1.9 20.2 9.8 28.1 30 30-20.2 1.9-28.1 9.8-30 30-1.9-20.2-9.8-28.1-30-30 20.2-1.9 28.1-9.8 30-30z" />
-			</svg>
+			<TvMark class="mb-[6cqw] h-[11cqw] w-[10cqw] text-accent/80" />
 		{/if}
 		<span class="font-serif leading-[1.12] text-zinc-100 {landscape ? 'line-clamp-2' : 'line-clamp-5'}" style="font-size: {fontSize}cqw">{title}</span>
 		{#if year}

@@ -11,7 +11,7 @@
 
 	const prompt = $derived(
 		[
-			'Please work through these open Vesper reports in this repo. If one is unclear, ask instead of guessing.',
+			'Please work through these open Streamer reports in this repo. If one is unclear, ask instead of guessing.',
 			...open.map((r) =>
 				[
 					`#${r.id} [${label(r.kind)}] ${r.message}`,
@@ -40,7 +40,7 @@
 	}
 </script>
 
-<svelte:head><title>Bugs & ideas — Vesper</title></svelte:head>
+<svelte:head><title>Bugs & ideas — Streamer</title></svelte:head>
 
 {#snippet report(r: (typeof data.reports)[number])}
 	<div class="flex items-start gap-3 rounded-xl border border-surface-800 bg-surface-900 px-4 py-3">

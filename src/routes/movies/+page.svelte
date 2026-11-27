@@ -16,7 +16,7 @@
 	const shown = $derived(data.movies.slice(0, limit));
 </script>
 
-<svelte:head><title>Movies — Vesper</title></svelte:head>
+<svelte:head><title>Movies — Streamer</title></svelte:head>
 
 <div class="flex h-full">
 	<CategorySidebar

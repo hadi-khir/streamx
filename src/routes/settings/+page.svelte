@@ -7,7 +7,7 @@
 	let testing = $state(false);
 </script>
 
-<svelte:head><title>Settings — Vesper</title></svelte:head>
+<svelte:head><title>Settings — Streamer</title></svelte:head>
 
 <div class="mx-auto max-w-3xl p-6">
 	<h1 class="text-2xl">Settings</h1>
@@ -138,7 +138,7 @@
 		</form>
 		<p class="mt-3 text-xs text-zinc-600">
 			Xtream credentials are stored in plain text on the server — they are required to build
-			stream URLs. Run Vesper only on hardware you trust.
+			stream URLs. Run Streamer only on hardware you trust.
 		</p>
 	</section>
 

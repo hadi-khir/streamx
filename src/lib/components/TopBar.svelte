@@ -88,7 +88,7 @@
 	class="gutter fixed inset-x-0 top-0 z-40 flex h-16 items-center gap-4 transition-colors duration-500 lg:gap-10
 		{scrolled ? 'bg-surface-950/90 shadow-[0_1px_0_rgb(255_255_255/0.1)] backdrop-blur-md' : 'bg-gradient-to-b from-surface-950/80 to-transparent'}"
 >
-	<a href="/" class="shrink-0" title="Home" aria-label="Vesper, home">
+	<a href="/" class="shrink-0" title="Home" aria-label="Streamer, home">
 		<Wordmark class="text-2xl sm:text-[1.65rem]" />
 	</a>
 
