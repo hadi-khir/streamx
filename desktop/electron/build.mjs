@@ -46,7 +46,9 @@ for (const name of ['build', 'drizzle', 'package.json', 'package-lock.json']) {
 	cpSync(join(root, name), join(server, name), { recursive: true });
 }
 cpSync(join(here, '..', 'server.mjs'), join(server, 'main.mjs'));
-run('npm ci --omit=dev --no-audit --no-fund', server, withNode);
+// better-sqlite3 loads its own prebuilt binaries; without --ignore-scripts npm would also
+// compile it, which on Windows needs Visual Studio
+run('npm ci --omit=dev --ignore-scripts --no-audit --no-fund', server, withNode);
 rmSync(join(server, '.svelte-kit'), { recursive: true, force: true });
 
 // The icon is the site's favicon, drawn large

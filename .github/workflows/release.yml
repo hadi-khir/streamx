@@ -33,6 +33,7 @@ jobs:
 
   windows-linux:
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -45,7 +46,8 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/electron/package-lock.json
-      - run: npm ci
+      # Skips compiling better-sqlite3, which has prebuilt binaries (see build.mjs)
+      - run: npm ci --ignore-scripts
       - run: npm ci
         working-directory: desktop/electron
       - run: VERSION="${GITHUB_REF_NAME#v}" node desktop/electron/build.mjs
